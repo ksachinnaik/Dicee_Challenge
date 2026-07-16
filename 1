@@ -184,4 +184,87 @@ Cell 13	Use the LLM to understand the sentence and infer the semantic relationsh
 Cell 14	Convert the semantic triples into RDF triples for storage and graph construction	RDF triples
 One suggestion
 
+
+
+
+
+
+
+
+
+
+What Cell 10 does
+
+Cell 10 converts this into RDF triples.
+
+For every semantic record:
+
+Subject
+Predicate
+Object
+
+it creates
+
+(subject, predicate, object)
+
+Example
+
+Input
+
+Subject:
+Turbine Engineering
+
+Predicate:
+within
+
+Object:
+HotEnd Design
+
+Output
+
+(Turbine Engineering,
+ within,
+ HotEnd Design)
+
+Second
+
+(Turbine Engineering,
+ under,
+ Turbomachinery)
+
+Third
+
+(HotEnd Design,
+ uses,
+ MATLAB)
+After Cell 10
+
+You now have
+
+RDF Triple 1
+
+Turbine Engineering
+        │
+      within
+        ▼
+HotEnd Design
+
+
+RDF Triple 2
+
+Turbine Engineering
+        │
+      under
+        ▼
+Turbomachinery
+
+
+RDF Triple 3
+
+HotEnd Design
+        │
+      uses
+        ▼
+MATLAB
+
 Since you're building a Wikipedia-style semantic GraphRAG, I would make Cell 13 responsible for producing the complete semantic triple (subject, predicate, object) rather than just the predicate. Then Cell 14 only needs to validate, normalize, and store those triples as RDF. This separation makes the pipeline cleaner and easier to debug.
