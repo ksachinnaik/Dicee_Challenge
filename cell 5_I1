@@ -1,0 +1,86 @@
+# ==========================================================
+# Stage 4 : Knowledge Node Creation
+# Cell 6 : Create One Node per XML
+# ==========================================================
+
+from pyspark.sql import functions as F
+
+print("=" * 80)
+print("KNOWLEDGE NODE CREATION")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# Input from Cell 5
+# ----------------------------------------------------------
+
+node_df = xml_df
+
+print(f"XML Documents : {node_df.count()}")
+
+# ----------------------------------------------------------
+# Create Knowledge Node
+# ----------------------------------------------------------
+# One XML = One Knowledge Node
+#
+# Node ID      -> reference
+# Node Name    -> title
+# Node Content -> content
+# ----------------------------------------------------------
+
+knowledge_nodes = (
+
+    node_df
+
+    .select(
+
+        F.col("reference").alias("node_id"),
+
+        F.col("title").alias("node_name"),
+
+        F.col("content").alias("node_content"),
+
+        F.col("doc_id"),
+
+        F.col("source"),
+
+        F.col("version"),
+
+        F.col("content_update_date"),
+
+        F.col("content_author")
+
+    )
+
+)
+
+# ----------------------------------------------------------
+# Remove Duplicate Nodes
+# ----------------------------------------------------------
+
+knowledge_nodes = (
+
+    knowledge_nodes
+
+    .dropDuplicates(
+
+        ["node_id"]
+
+    )
+
+)
+
+# ----------------------------------------------------------
+# Node Statistics
+# ----------------------------------------------------------
+
+print()
+
+print("=" * 80)
+print("KNOWLEDGE NODES")
+print("=" * 80)
+
+print(f"Total Nodes Created : {knowledge_nodes.count()}")
+
+print()
+
+display(knowledge_nodes)
