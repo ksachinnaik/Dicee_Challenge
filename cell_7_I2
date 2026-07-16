@@ -10,7 +10,7 @@ print("HYPERLINK EXTRACTION")
 print("=" * 80)
 
 # ----------------------------------------------------------
-# Normalize Reference
+# Normalize XML Reference
 # ----------------------------------------------------------
 
 def normalize_reference(ref):
@@ -20,41 +20,64 @@ def normalize_reference(ref):
 
     ref = ref.strip()
 
+    # Remove anchor
     if "||" in ref:
         ref = ref.split("||")[0]
 
+    # Remove section
     if "#" in ref:
         ref = ref.split("#")[0]
 
+    # Decode HTML
     ref = ref.replace("&amp;", "&")
+
+    # Remove extra spaces
     ref = re.sub(r"\s+", " ", ref)
 
     return ref.strip()
 
 
 # ----------------------------------------------------------
-# Parse XML Hyperlink
+# Parse Target Link
 # ----------------------------------------------------------
 
-def parse_link(raw):
+def parse_target(target):
 
-    raw = raw.strip()
+    target = target.strip()
 
-    if not raw.startswith("doc:"):
-        return None
+    # -------- doc:wiki:Temp_Import --------
 
-    body = raw[4:]
+    if target.startswith("doc:wiki:"):
 
-    if body.startswith("wiki:"):
-        return "doc:wiki", normalize_reference(body[len("wiki:"):])
+        return (
 
-    if body.startswith("Temp_Import:"):
-        return "doc:Temp_Import", normalize_reference(body[len("Temp_Import:"):])
+            "doc:wiki",
 
-    if body.startswith("Temp_Import."):
-        return "doc:Temp_Import", normalize_reference(body)
+            normalize_reference(
 
-    return "doc", normalize_reference(body)
+                target[len("doc:wiki:"):]
+
+            )
+
+        )
+
+    # -------- doc:Temp_Import --------
+
+    if target.startswith("doc:Temp_Import"):
+
+        return (
+
+            "doc:Temp_Import",
+
+            normalize_reference(
+
+                target[len("doc:"):]
+
+            )
+
+        )
+
+    return None
 
 
 # ----------------------------------------------------------
@@ -65,48 +88,61 @@ hyperlink_records = []
 
 for row in knowledge_nodes.toLocalIterator():
 
-    node_id = row["node_id"]
-    node_name = row["node_name"]
+    source_node = row["node_id"]
+
+    source_title = row["node_name"]
+
     content = row["node_content"] or ""
 
-    wiki_links = re.findall(r"\[\[(.*?)\]\]", content)
+    # Extract every [[...]]
+    matches = re.findall(r"\[\[(.*?)\]\]", content)
 
     seen = set()
 
-    for raw in wiki_links:
+    for match in matches:
 
-        parsed = parse_link(raw)
+        # ----------------------------
+        # Split Display >> Target
+        # ----------------------------
+
+        if ">>" not in match:
+            continue
+
+        display_text, target = match.split(">>", 1)
+
+        display_text = display_text.strip()
+
+        parsed = parse_target(target)
 
         if parsed is None:
             continue
 
         link_type, target_reference = parsed
 
-        if target_reference in seen:
+        key = (target_reference, display_text)
+
+        if key in seen:
             continue
 
-        seen.add(target_reference)
-
-        # Display text before >>
-        if ">>" in raw:
-            display_text = raw.split(">>")[0].strip()
-        else:
-            display_text = raw.strip()
+        seen.add(key)
 
         hyperlink_records.append({
 
-            "source_node": node_id,
-            "source_title": node_name,
+            "source_node": source_node,
+
+            "source_title": source_title,
+
+            "display_text": display_text,
 
             "target_reference": target_reference,
-            "display_text": display_text,
 
             "link_type": link_type
 
         })
 
+
 # ----------------------------------------------------------
-# Statistics
+# Summary
 # ----------------------------------------------------------
 
 print()
@@ -115,11 +151,12 @@ print("=" * 80)
 print("HYPERLINK SUMMARY")
 print("=" * 80)
 
-print(f"Knowledge Nodes     : {knowledge_nodes.count()}")
-print(f"Hyperlinks Extracted: {len(hyperlink_records)}")
+print(f"Knowledge Nodes : {knowledge_nodes.count()}")
+
+print(f"Hyperlinks      : {len(hyperlink_records)}")
 
 print()
 
-for record in hyperlink_records[:10]:
+for record in hyperlink_records[:20]:
 
     print(record)
