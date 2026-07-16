@@ -1,44 +1,143 @@
-# ============================================================
-# Cell 2 : Import Required Libraries
-# ============================================================
+What is the work of Cell 9?
 
-# -------------------------
-# Python Utilities
-# -------------------------
-import os
-import re
-from pathlib import Path
+Cell 9 does not create the RDF triples.
 
-# -------------------------
-# XML Processing
-# -------------------------
-import xml.etree.ElementTree as ET
-from bs4 import BeautifulSoup
+Its only job is:
 
-# -------------------------
-# Spark (Databricks)
-# -------------------------
-from pyspark.sql import Row
-from pyspark.sql.functions import monotonically_increasing_id
+Understand the meaning of the sentence and extract the semantic relationship (predicate) between the Source XML page and the linked XML page.
 
-# -------------------------
-# Knowledge Graph
-# -------------------------
-import networkx as nx
-import matplotlib.pyplot as plt
-from rdflib import Graph, URIRef, Literal, Namespace
+Think of Cell 9 as a Relation Extraction step.
 
-# -------------------------
-# NLP
-# -------------------------
-import spacy
+Example 1
 
-# -------------------------
-# Environment
-# -------------------------
-from dotenv import load_dotenv
+Source XML
 
-# -------------------------
-# Azure OpenAI
-# -------------------------
-from openai import AzureOpenAI
+Title:
+Turbine Engineering
+
+Sentence from Cell 8
+
+Turbine Engineering is a team within HotEnd Design.
+
+Hyperlink
+
+HotEnd Design
+
+Cell 9 should output
+
+{
+    "subject": "Turbine Engineering",
+    "predicate": "within",
+    "object": "HotEnd Design"
+}
+Example 2
+
+Sentence
+
+Engine Analysis depends on Solver.
+
+Hyperlink
+
+Solver
+
+Output
+
+{
+    "subject":"Engine Analysis",
+    "predicate":"depends_on",
+    "object":"Solver"
+}
+Example 3
+
+Sentence
+
+OpenTCCM uses MATLAB.
+
+Hyperlink
+
+MATLAB
+
+Output
+
+{
+    "subject":"OpenTCCM",
+    "predicate":"uses",
+    "object":"MATLAB"
+}
+Your XML example
+
+Suppose your XML contains
+
+Title
+
+Turbine Engineering
+
+Content
+
+Turbine Engineering is a team within
+[[HotEnd Design>>doc:wiki:Temp_Import.HotEndDesign.WebHome]]
+
+under
+
+[[Turbomachinery>>doc:wiki:Temp_Import.Turbomachinery.WebHome]]
+
+Cell 8 produces
+
+Sentence
+
+Turbine Engineering is a team within HotEnd Design under Turbomachinery.
+
+Now Cell 9 asks the LLM:
+
+What relationship connects
+
+Turbine Engineering
+
+and
+
+HotEnd Design
+
+LLM returns
+
+within
+
+Again
+
+What relationship connects
+
+Turbine Engineering
+
+and
+
+Turbomachinery
+
+LLM returns
+
+under
+Output of Cell 9
+
+The output should be something like this:
+
+semantic_records = [
+
+{
+"subject":"Turbine Engineering",
+"predicate":"within",
+"object":"HotEnd Design"
+},
+
+{
+"subject":"Turbine Engineering",
+"predicate":"under",
+"object":"Turbomachinery"
+},
+
+{
+"subject":"HotEnd Design",
+"predicate":"contains",
+"object":"Blade Design"
+}
+
+]
+
+Notice that Cell 9 is only producing semantic relationships.
