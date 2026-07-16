@@ -1,0 +1,104 @@
+# ==========================================================
+# Stage 8 : RDF Triple Generation
+# Cell 10 : Create RDF Triples
+# ==========================================================
+
+print("=" * 80)
+print("RDF TRIPLE GENERATION")
+print("=" * 80)
+
+rdf_triples = []
+
+seen = set()
+
+# ----------------------------------------------------------
+# Build RDF Triples
+# ----------------------------------------------------------
+
+for record in semantic_records:
+
+    subject = record["subject"]
+    predicate = record["predicate"]
+    object_node = record["object"]
+
+    # Skip incomplete triples
+    if not subject or not predicate or not object_node:
+        continue
+
+    # Skip self-loops
+    if subject == object_node:
+        continue
+
+    triple_key = (subject, predicate, object_node)
+
+    # Remove duplicate triples
+    if triple_key in seen:
+        continue
+
+    seen.add(triple_key)
+
+    rdf_triples.append({
+
+        "subject": subject,
+
+        "subject_title": record["subject_title"],
+
+        "predicate": predicate,
+
+        "object": object_node,
+
+        "object_title": record["object_title"],
+
+        "sentence": record["sentence"],
+
+        "link_type": record["link_type"]
+
+    })
+
+# ----------------------------------------------------------
+# Summary
+# ----------------------------------------------------------
+
+print()
+print("=" * 80)
+print("RDF TRIPLE SUMMARY")
+print("=" * 80)
+
+print(f"Semantic Records : {len(semantic_records)}")
+print(f"Unique RDF Triples : {len(rdf_triples)}")
+
+# ----------------------------------------------------------
+# Predicate Summary
+# ----------------------------------------------------------
+
+predicate_summary = {}
+
+for triple in rdf_triples:
+
+    p = triple["predicate"]
+
+    predicate_summary[p] = predicate_summary.get(p, 0) + 1
+
+print()
+
+print("Predicate Summary")
+print("-" * 80)
+
+for p, count in sorted(predicate_summary.items()):
+
+    print(f"{p:<25} : {count}")
+
+print()
+
+print("=" * 80)
+print("Sample RDF Triples")
+print("=" * 80)
+
+for triple in rdf_triples[:10]:
+
+    print()
+
+    print(f"Subject   : {triple['subject_title']}")
+    print(f"Predicate : {triple['predicate']}")
+    print(f"Object    : {triple['object_title']}")
+    print(f"Sentence  : {triple['sentence']}")
