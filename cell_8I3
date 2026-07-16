@@ -1,0 +1,76 @@
+# ==========================================================
+# Stage 6 : Sentence Extraction
+# Cell 8 : Locate Sentence Containing Hyperlink
+# ==========================================================
+
+import re
+
+print("=" * 80)
+print("SENTENCE EXTRACTION")
+print("=" * 80)
+
+sentence_records = []
+
+for row in knowledge_nodes.toLocalIterator():
+
+    node_id = row["node_id"]
+    node_name = row["node_name"]
+    content = row["node_content"] or ""
+
+    # ------------------------------------------------------
+    # Split content into sentences
+    # ------------------------------------------------------
+
+    sentences = re.split(r'(?<=[.!?])\s+', content)
+
+    for sentence in sentences:
+
+        # Find all wiki links inside the sentence
+        matches = re.findall(r"\[\[(.*?)\]\]", sentence)
+
+        if not matches:
+            continue
+
+        for raw in matches:
+
+            parsed = parse_link(raw)
+
+            if parsed is None:
+                continue
+
+            link_type, target_reference = parsed
+
+            if ">>" in raw:
+                display_text = raw.split(">>")[0].strip()
+            else:
+                display_text = raw.strip()
+
+            sentence_records.append({
+
+                "source_node": node_id,
+
+                "source_title": node_name,
+
+                "target_reference": target_reference,
+
+                "display_text": display_text,
+
+                "link_type": link_type,
+
+                "sentence": sentence.strip()
+
+            })
+
+print()
+
+print("=" * 80)
+print("SENTENCE RECORDS")
+print("=" * 80)
+
+print(f"Total Sentence Records : {len(sentence_records)}")
+
+print()
+
+for record in sentence_records[:10]:
+
+    print(record)
