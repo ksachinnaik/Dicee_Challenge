@@ -1,0 +1,94 @@
+# ==========================================================
+# Stage 8 : Knowledge Graph Construction
+# Cell 12 : Visualize Knowledge Graph
+# ==========================================================
+
+import matplotlib.pyplot as plt
+import networkx as nx
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH VISUALIZATION")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# Graph Statistics
+# ----------------------------------------------------------
+
+print(f"Total Nodes : {KG.number_of_nodes()}")
+print(f"Total Edges : {KG.number_of_edges()}")
+
+# ----------------------------------------------------------
+# Build Labels
+# ----------------------------------------------------------
+
+node_labels = {}
+
+for node, attr in KG.nodes(data=True):
+
+    node_labels[node] = attr.get("title", node)
+
+edge_labels = {}
+
+for u, v, attr in KG.edges(data=True):
+
+    edge_labels[(u, v)] = attr.get("predicate", "")
+
+# ----------------------------------------------------------
+# Draw Graph
+# ----------------------------------------------------------
+
+plt.figure(figsize=(18, 12))
+
+pos = nx.spring_layout(
+    KG,
+    seed=42,
+    k=1.2
+)
+
+# Draw Nodes
+nx.draw_networkx_nodes(
+    KG,
+    pos,
+    node_size=2200,
+    node_color="skyblue",
+    edgecolors="black"
+)
+
+# Draw Node Labels
+nx.draw_networkx_labels(
+    KG,
+    pos,
+    labels=node_labels,
+    font_size=9,
+    font_weight="bold"
+)
+
+# Draw Edges
+nx.draw_networkx_edges(
+    KG,
+    pos,
+    arrows=True,
+    arrowsize=18,
+    width=2
+)
+
+# Draw Predicate Labels
+nx.draw_networkx_edge_labels(
+    KG,
+    pos,
+    edge_labels=edge_labels,
+    font_size=8,
+    rotate=False
+)
+
+plt.title(
+    "Semantic Knowledge Graph",
+    fontsize=18,
+    fontweight="bold"
+)
+
+plt.axis("off")
+
+plt.tight_layout()
+
+plt.show()
