@@ -1,0 +1,111 @@
+# ==========================================================
+# Stage 8 : Knowledge Graph Construction
+# Cell 11 : Build Knowledge Graph
+# ==========================================================
+
+import networkx as nx
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH CONSTRUCTION")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# Create Directed Graph
+# ----------------------------------------------------------
+
+KG = nx.DiGraph()
+
+# ----------------------------------------------------------
+# Add Nodes and Edges
+# ----------------------------------------------------------
+
+for triple in rdf_triples:
+
+    subject = triple["subject"]
+    object_node = triple["object"]
+
+    # -------------------------------
+    # Add Subject Node
+    # -------------------------------
+
+    KG.add_node(
+
+        subject,
+
+        title=triple["subject_title"]
+
+    )
+
+    # -------------------------------
+    # Add Object Node
+    # -------------------------------
+
+    KG.add_node(
+
+        object_node,
+
+        title=triple["object_title"]
+
+    )
+
+    # -------------------------------
+    # Add Semantic Edge
+    # -------------------------------
+
+    KG.add_edge(
+
+        subject,
+
+        object_node,
+
+        predicate=triple["predicate"],
+
+        sentence=triple["sentence"],
+
+        link_type=triple["link_type"]
+
+    )
+
+# ----------------------------------------------------------
+# Graph Summary
+# ----------------------------------------------------------
+
+print()
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH SUMMARY")
+print("=" * 80)
+
+print(f"Total Nodes : {KG.number_of_nodes()}")
+print(f"Total Edges : {KG.number_of_edges()}")
+
+print()
+
+print("=" * 80)
+print("Sample Nodes")
+print("=" * 80)
+
+for node, attr in list(KG.nodes(data=True))[:10]:
+
+    print(f"Node ID    : {node}")
+    print(f"Node Title : {attr.get('title')}")
+    print("-" * 60)
+
+print()
+
+print("=" * 80)
+print("Sample Edges")
+print("=" * 80)
+
+for source, target, attr in list(KG.edges(data=True))[:10]:
+
+    print(f"Source    : {KG.nodes[source]['title']}")
+    print(f"Predicate : {attr['predicate']}")
+    print(f"Target    : {KG.nodes[target]['title']}")
+    print("-" * 60)
+
+print()
+
+print("=" * 80)
+print("Knowledge Graph Successfully Created")
+print("=" * 80)
