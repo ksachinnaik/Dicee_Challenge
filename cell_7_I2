@@ -159,4 +159,11 @@ print()
 
 for record in hyperlink_records[:20]:
 
+So the responsibility of Cell 8 is
+Read the XML content.
+Split the content into sentences.
+Find which sentence contains each extracted hyperlink.
+Store that sentence along with the hyperlink information.
+Pass the result to Cell 9 for semantic relationship extraction.
+
     print(record)
