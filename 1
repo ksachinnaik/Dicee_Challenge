@@ -267,4 +267,494 @@ HotEnd Design
         ▼
 MATLAB
 
-Since you're building a Wikipedia-style semantic GraphRAG, I would make Cell 13 responsible for producing the complete semantic triple (subject, predicate, object) rather than just the predicate. Then Cell 14 only needs to validate, normalize, and store those triples as RDF. This separation makes the pipeline cleaner and easier to debug.
+Since you're building a Wikipedia-style semantic GraphRAG, I would make Cell 13 responsible for producing the complete semantic triple (subject, predicate, object)rather than just the predicate. Then Cell 14 only needs to validate, normalize, and store those triples as RDF. This separation makes the pipeline cleaner and easier to debug.
+
+
+
+
+Yes, I think this is a good direction, and it does qualify as a Knowledge Graph for a GraphRAG system, provided we implement the edge extraction carefully.
+After looking at your XML files, here is the summary I would use as the design document.
+________________________________________
+GraphRAG Design Summary
+Goal
+Build a Knowledge Graph from approximately 20,000 XML files.
+Each XML represents one knowledge page, similar to a Wikipedia page. 
+________________________________________
+Step 1: XML Parsing
+Read every XML and extract:
+•	Reference 
+•	Title 
+•	Content 
+•	Tags 
+•	Metadata 
+Example:
+XML_3
+
+Title:
+Blocking Rules
+
+Content:
+Complete XML content
+________________________________________
+Step 2: Create the Node
+One XML = One Node
+We do not split the XML into multiple chunks.
+XML_3
+   │
+   ▼
+Node_3
+Each node contains:
+Node
+
+Document ID
+Title
+Content
+Tags
+Metadata
+________________________________________
+Step 3: Find Hyperlinks
+Inside the content, find every hyperlink such as
+doc:
+doc:wiki:
+doc:wiki:Temp_Import...
+Example
+The blocking rules are very similar to
+
+[[CS-E740 Requirements>>
+doc:wiki:Temp_Import.CSE740.WebHome]]
+The hyperlink tells us
+Destination Node
+
+↓
+
+CS-E740 Requirements
+________________________________________
+Step 4: Find the Relationship
+Now look only at the sentence containing the hyperlink.
+Example
+The blocking rules are very similar to
+CS-E740 Requirements.
+The relationship becomes
+similar_to
+Another example
+The project follows
+Certification Test.
+Relationship
+follows
+Another
+OpenTCCM uses
+MATLAB.
+Relationship
+uses
+________________________________________
+Step 5: Create RDF Triple
+Now create
+Subject
+
+Current XML Node
+↓
+Predicate
+
+similar_to
+↓
+Object
+
+Referenced XML Node
+Example
+Blocking Rules
+
+similar_to
+
+CS-E740 Requirements
+________________________________________
+Step 6: Store in Knowledge Graph
+Finally
+Blocking Rules
+      │
+similar_to
+      ▼
+CS-E740 Requirements
+
+Blocking Rules
+      │
+ follows
+      ▼
+Certification Test
+
+Blocking Rules
+      │
+  uses
+      ▼
+MATLAB
+This becomes your RDF Knowledge Graph.
+________________________________________
+Complete Architecture
+20,000 XML Files
+        │
+        ▼
+Parse XML
+        │
+        ▼
+Extract
+Reference
+Title
+Content
+Tags
+        │
+        ▼
+One XML = One Node
+        │
+        ▼
+Find all Hyperlinks
+(doc:, doc:wiki:, doc:Temp_Import)
+        │
+        ▼
+Locate sentence containing hyperlink
+        │
+        ▼
+Extract Predicate
+(using NLP/LLM)
+        │
+        ▼
+Resolve hyperlink to another XML
+        │
+        ▼
+Create RDF Triple
+        │
+        ▼
+Knowledge Graph
+        │
+        ▼
+GraphRAG Retrieval
+________________________________________
+Why I Think This Design Works
+✔ One XML = One Knowledge Unit
+You preserve the complete context of the document.
+________________________________________
+✔ Hyperlinks already exist
+Your XML already contains connections between pages.
+You don't have to discover them—they are already there.
+________________________________________
+✔ Rich semantic edges
+Instead of
+A ----links_to----> B
+you build
+A ----uses-------> B
+
+A ----similar_to-> B
+
+A ----follows----> B
+This is much more useful during graph traversal.
+________________________________________
+✔ Similar to Wikipedia
+This is very similar to Wikipedia:
+•	One Wikipedia page → One node. 
+•	Hyperlinks connect pages. 
+•	The surrounding sentence provides the meaning of the connection. 
+________________________________________
+My Suggestion for Implementation
+I think we should implement this step by step, not all at once.
+Phase 1
+•	Read XML 
+•	Extract metadata 
+•	Create one node per XML 
+•	Build a lookup table:
+reference → node
+Phase 2
+•	Parse hyperlinks from <content> 
+•	Resolve each hyperlink to another XML node 
+Phase 3
+•	Extract the sentence containing each hyperlink 
+•	Use an NLP model or an LLM to identify the predicate (relationship) 
+Phase 4
+•	Create RDF triples 
+•	Build the graph using NetworkX (or another graph library) 
+Phase 5
+•	Add graph traversal and retrieval (GraphRAG) 
+________________________________________
+I think this is a solid implementation plan. Share your code cell by cell, and we'll modify it incrementally instead of rewriting everything. We'll keep what already works, change only what's needed, and verify each stage before moving to the next. That approach will make it much easier to build and debug the knowledge graph.
+
+So your Knowledge Graph is
+Node
+One XML page (complete content) = One Node
+Edge
+The semantic relationship expressed in the sentence that connects the current XML page to the linked XML page.
+________________________________________
+Example
+Suppose XML A contains
+OpenTCCM uses
+[[MATLAB]]
+Graph
+OpenTCCM Page
+      │
+     uses
+      │
+      ▼
+MATLAB Page
+________________________________________
+Suppose another XML contains
+Blocking Rules are similar to
+[[CS-E740]]
+Graph
+Blocking Rules Page
+        │
+   similar_to
+        │
+        ▼
+CS-E740 Page
+________________________________________
+This is exactly the same philosophy as Wikipedia
+Wikipedia
+
+Page
+     │
+     ▼
+Hyperlink
+     │
+     ▼
+Another Page
+
+↓
+
+Knowledge Graph
+Your project
+XML
+
+Page
+     │
+     ▼
+Hyperlink
+(doc:wiki:)
+     │
+     ▼
+Another XML Page
+
+↓
+
+Knowledge Graph
+________________________________________
+I think this is the right architecture for your project.
+The only thing I would slightly refine is the edge extraction. In Wikipedia, the hyperlink itself does not define the relationship—the surrounding sentence does. I recommend doing exactly the same:
+•	Node = One XML page (complete content) 
+•	Hyperlink = Identifies the destination XML page 
+•	Sentence containing the hyperlink = Source for extracting the RDF predicate (relationship) 
+That makes your XML corpus behave like a private Wikipedia, and the resulting RDF graph becomes a true semantic Knowledge Graph suitable for GraphRAG rather than just a document-link graph.
+
+
+
+ 
+
+
+
+ 
+
+Implementation Order
+We'll implement the notebook in this sequence:
+Cell 1
+•	Imports 
+•	Install libraries 
+Cell 2
+•	Read XML files 
+Cell 3
+•	Extract: 
+o	Title 
+o	Reference 
+o	Content 
+o	Metadata 
+Cell 4
+•	Create one node per XML 
+Cell 5
+•	Find hyperlinks (doc:wiki, doc:Temp_Import, doc:) 
+Cell 6
+•	Resolve hyperlinks to target XML nodes 
+Cell 7
+•	Extract the sentence containing each hyperlink 
+Cell 8
+•	Extract the semantic relationship (predicate) 
+Cell 9
+•	Create RDF triples 
+Cell 10
+•	Build the Knowledge Graph 
+Cell 11
+•	Visualize the graph 
+Cell 12
+•	Implement GraphRAG retrieval
+
+ 
+
+ 
+This is actually the most important stage of your GraphRAG project. A great knowledge graph is only useful if the retriever can find the right nodes and relationships.
+Based on your architecture, I recommend not using a simple graph traversal. Instead, build a multi-stage graph retriever.
+________________________________________
+Recommended Retrieval Architecture
+User Query
+      │
+      ▼
+Query Understanding
+      │
+      ▼
+Entity Detection
+      │
+      ▼
+Find Start Node(s)
+      │
+      ▼
+Graph Traversal (1-Hop, 2-Hop, 3-Hop)
+      │
+      ▼
+Rank Retrieved Paths
+      │
+      ▼
+Context Builder
+      │
+      ▼
+LLM Response
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+What exactly does Cell 15 do?
+Cell 15 gives RDF triples like:
+(Turbine Engineering, within, HotEnd Design)
+
+(Turbine Engineering, under, Turbomachinery)
+
+(HotEnd Design, uses, MATLAB)
+
+(Blade Design, depends_on, Solver)
+Cell 15 converts these RDF triples into a graph.
+For every triple:
+(subject, predicate, object)
+Cell 15 performs:
+Step 1
+Create the Subject node if it doesn't exist.
+Node:
+Turbine Engineering
+________________________________________
+Step 2
+Create the Object node if it doesn't exist.
+Node:
+HotEnd Design
+________________________________________
+Step 3
+Create the edge.
+Turbine Engineering
+        │
+      within
+        ▼
+HotEnd Design
+________________________________________
+Do the same for every RDF triple.
+Example:
+(Turbine Engineering,
+ under,
+ Turbomachinery)
+becomes
+Turbine Engineering
+        │
+      under
+        ▼
+Turbomachinery
+________________________________________
+(HotEnd Design,
+ uses,
+ MATLAB)
+becomes
+HotEnd Design
+      │
+     uses
+      ▼
+MATLAB
+________________________________________
+Final Knowledge Graph
+After Cell 15, your graph looks like:
+                    Turbomachinery
+                           ▲
+                         under
+                           │
+                           │
+HotEnd Design ◄── within ── Turbine Engineering
+      │
+    uses
+      ▼
+   MATLAB
+      │
+ depends_on
+      ▼
+   Solver
+This is your Knowledge Graph.
+________________________________________
+What is stored in the graph?
+Each node stores information such as:
+Node
+
+ID:
+Temp_Import.Turbine_Engineering.WebHome
+
+Title:
+Turbine Engineering
+Each edge stores:
+Edge
+
+Source:
+Temp_Import.Turbine_Engineering.WebHome
+
+Predicate:
+within
+
+Target:
+Temp_Import.HotEnd_Design.WebHome
+So internally, one edge looks like:
+KG.add_edge(
+
+    source_node,
+
+    target_node,
+
+    predicate="within"
+
+)
+________________________________________
+Why is Cell 15 important?
+Because GraphRAG retrieval works on the graph built in Cell 15.
+Later, when a user asks:
+"How is MATLAB related to Turbine Engineering?"
+the retriever starts from one node and traverses the graph:
+Turbine Engineering
+        │
+      within
+        ▼
+HotEnd Design
+        │
+      uses
+        ▼
+MATLAB
+Without Cell 15, there is no graph to traverse.
+
+
