@@ -1,0 +1,44 @@
+# ============================================================
+# Cell 2 : Import Required Libraries
+# ============================================================
+
+# -------------------------
+# Python Utilities
+# -------------------------
+import os
+import re
+from pathlib import Path
+
+# -------------------------
+# XML Processing
+# -------------------------
+import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
+
+# -------------------------
+# Spark (Databricks)
+# -------------------------
+from pyspark.sql import Row
+from pyspark.sql.functions import monotonically_increasing_id
+
+# -------------------------
+# Knowledge Graph
+# -------------------------
+import networkx as nx
+import matplotlib.pyplot as plt
+from rdflib import Graph, URIRef, Literal, Namespace
+
+# -------------------------
+# NLP
+# -------------------------
+import spacy
+
+# -------------------------
+# Environment
+# -------------------------
+from dotenv import load_dotenv
+
+# -------------------------
+# Azure OpenAI
+# -------------------------
+from openai import AzureOpenAI
