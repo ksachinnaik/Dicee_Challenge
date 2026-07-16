@@ -1,0 +1,287 @@
+Excellent question.
+
+The prompt should NOT be at the beginning of the retriever. It should only be used after the retriever has collected the graph context.
+
+This is one of the biggest differences between a good GraphRAG system and a simple RAG system.
+
+Correct Flow
+                    OFFLINE
+-------------------------------------------------
+
+20,000 XML
+      │
+      ▼
+Knowledge Graph
+      │
+      ▼
+Saved Graph
+
+
+                    ONLINE
+-------------------------------------------------
+
+User Query
+      │
+      ▼
+Cell 13
+Query Understanding
+      │
+      ▼
+Cell 14
+Find Start Node
+      │
+      ▼
+Cell 15
+Graph Traversal
+      │
+      ▼
+Cell 16
+Path Ranking
+      │
+      ▼
+Cell 17
+Context Builder
+      │
+      ▼
+⭐⭐ Prompt Construction ⭐⭐
+      │
+      ▼
+Cell 18
+LLM
+      │
+      ▼
+Answer
+Why?
+
+Suppose the user asks
+
+How is MATLAB related to Turbine Engineering?
+
+At this point the LLM knows nothing.
+
+If you call the LLM immediately, it has no graph context.
+
+Instead, the retriever first collects:
+
+Turbine Engineering
+        │
+      within
+        ▼
+HotEnd Design
+        │
+      includes
+        ▼
+Blade Design
+        │
+       uses
+        ▼
+MATLAB
+
+Now we have useful evidence.
+
+Then Cell 17 builds the context
+
+It converts the graph into readable text.
+
+Example
+
+Retrieved Knowledge Graph
+
+1.
+Turbine Engineering is within HotEnd Design.
+
+2.
+HotEnd Design includes Blade Design.
+
+3.
+Blade Design uses MATLAB.
+Now comes the Prompt
+
+Only here.
+
+Example prompt
+
+You are an expert assistant.
+
+Answer the user's question ONLY using the retrieved
+Knowledge Graph context.
+
+If the answer is not present,
+say that the information is unavailable.
+
+---------------------------------------
+
+Question
+
+How is MATLAB related to Turbine Engineering?
+
+---------------------------------------
+
+Knowledge Graph Context
+
+Turbine Engineering is within HotEnd Design.
+
+HotEnd Design includes Blade Design.
+
+Blade Design uses MATLAB.
+
+---------------------------------------
+
+Answer
+
+Now the LLM has everything it needs.
+
+So where is the Prompt?
+Cell 17
+Context Builder
+        │
+        ▼
+Prompt Builder ⭐
+        │
+        ▼
+Cell 18
+LLM
+Architecture
+Knowledge Graph
+       │
+       ▼
+User Query
+       │
+       ▼
+Entity Detection
+       │
+       ▼
+Find Start Node
+       │
+       ▼
+Graph Traversal
+       │
+       ▼
+Path Ranking
+       │
+       ▼
+Context Builder
+       │
+       ▼
+Prompt Builder ⭐
+       │
+       ▼
+Azure OpenAI
+       │
+       ▼
+Answer
+We actually have two prompts in the entire GraphRAG pipeline
+Prompt 1 (Offline Phase)
+
+Location: Cell 9
+
+Purpose:
+
+Extract semantic relationships from XML sentences.
+
+Example:
+
+Sentence:
+Engine Analysis depends on Solver.
+
+Return the semantic relationship.
+
+Output:
+
+depends_on
+
+This prompt is used once while building the Knowledge Graph.
+
+Prompt 2 (Online Phase)
+
+Location: After retrieval (Cell 17 → Cell 18)
+
+Purpose:
+
+Generate the final answer using the retrieved graph context.
+
+Example:
+
+Question:
+How is MATLAB related to Turbine Engineering?
+
+Knowledge Graph Context:
+Turbine Engineering is within HotEnd Design.
+HotEnd Design includes Blade Design.
+Blade Design uses MATLAB.
+
+Answer:
+...
+
+This prompt is used for every user query.
+
+Final architecture
+                     OFFLINE PHASE
+──────────────────────────────────────────
+
+Cell 6  Create Nodes
+
+↓
+
+Cell 7  Extract Hyperlinks
+
+↓
+
+Cell 8  Locate Sentence
+
+↓
+
+Cell 9  LLM Prompt ①
+Extract Semantic Relationship
+
+↓
+
+Cell 10 RDF Triples
+
+↓
+
+Cell 11 Knowledge Graph
+
+↓
+
+Save Graph
+
+
+                     ONLINE PHASE
+──────────────────────────────────────────
+
+User Query
+
+↓
+
+Cell 13 Query Understanding
+
+↓
+
+Cell 14 Find Start Node
+
+↓
+
+Cell 15 Graph Traversal
+
+↓
+
+Cell 16 Path Ranking
+
+↓
+
+Cell 17 Context Builder
+
+↓
+
+Prompt ② ⭐
+
+↓
+
+Cell 18 LLM
+
+↓
+
+Final Answer
+
+This separation is the cleanest design: the offline prompt enriches your graph with semantic relationships, while the online prompt uses the graph to answer user questions.
