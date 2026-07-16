@@ -1,0 +1,126 @@
+# ==========================================================
+# Stage 6 : Semantic Relationship Extraction
+# Cell 9 : Extract Semantic Relationship
+# ==========================================================
+
+print("=" * 80)
+print("SEMANTIC RELATIONSHIP EXTRACTION")
+print("=" * 80)
+
+SYSTEM_PROMPT = """
+You are an expert Knowledge Graph relation extraction system.
+
+Your task is to build RDF triples.
+
+You will receive:
+
+1. Source XML page title.
+2. One sentence from that page.
+3. The hyperlink text.
+4. The target XML reference.
+
+Extract ONLY the semantic relationship that connects the
+Source XML page to the hyperlink.
+
+Rules:
+
+- Return ONE predicate only.
+- lowercase
+- snake_case
+- no explanation
+- no punctuation
+- do not return complete sentences
+- ignore hyperlink syntax such as doc:, doc:wiki:, doc:Temp_Import
+- infer the relationship only from the sentence
+- if no relationship is clear return:
+related_to
+
+Examples
+
+"Turbine Engineering is a team within HotEnd Design."
+
+Output:
+within
+
+"Engine Analysis depends on Solver."
+
+Output:
+depends_on
+
+"OpenTCCM uses MATLAB."
+
+Output:
+uses
+
+"The document describes Blade Design."
+
+Output:
+describes
+"""
+
+semantic_records = []
+
+for record in sentence_records:
+
+    prompt = f"""
+Source XML:
+{record['source_title']}
+
+Sentence:
+{record['sentence']}
+
+Hyperlink:
+{record['display_text']}
+
+Target XML:
+{record['target_reference']}
+"""
+
+    try:
+
+        response = llm.invoke(
+            [
+                ("system", SYSTEM_PROMPT),
+                ("human", prompt)
+            ]
+        )
+
+        predicate = (
+            response.content
+            .strip()
+            .lower()
+            .replace(" ", "_")
+        )
+
+    except Exception:
+
+        predicate = "related_to"
+
+    semantic_records.append({
+
+        "subject": record["source_node"],
+
+        "subject_title": record["source_title"],
+
+        "predicate": predicate,
+
+        "object": record["target_reference"],
+
+        "object_title": record["display_text"],
+
+        "sentence": record["sentence"],
+
+        "link_type": record["link_type"]
+
+    })
+
+print("=" * 80)
+print("SEMANTIC RELATIONSHIP SUMMARY")
+print("=" * 80)
+
+print(f"Relationships Extracted : {len(semantic_records)}")
+
+print()
+
+for row in semantic_records[:10]:
+    print(row)
