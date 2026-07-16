@@ -141,3 +141,47 @@ semantic_records = [
 ]
 
 Notice that Cell 9 is only producing semantic relationships.
+
+
+Then what does Cell 14 do?
+
+Cell 14 simply converts those semantic relationships into RDF triples.
+
+Cell 13
+
+subject
+predicate
+object
+
+↓
+
+Cell 14
+
+(subject,predicate,object)
+
+Example
+
+Turbine Engineering
+
+within
+
+HotEnd Design
+
+becomes
+
+(Turbine Engineering,
+ within,
+ HotEnd Design)
+
+This RDF triple is then added to your Knowledge Graph.
+
+
+Responsibilities of each cell
+Cell	                 Responsibility	                                                   Output
+Cell 8	Extract all hyperlinks (doc:wiki, doc:Temp_Import) from the XML content	Hyperlink records
+Cell 9	Find the sentence containing each hyperlink and clean the sentence	Sentence records
+Cell 13	Use the LLM to understand the sentence and infer the semantic relationship (predicate) between the source page and the hyperlink	Semantic triples (subject, predicate, object)
+Cell 14	Convert the semantic triples into RDF triples for storage and graph construction	RDF triples
+One suggestion
+
+Since you're building a Wikipedia-style semantic GraphRAG, I would make Cell 13 responsible for producing the complete semantic triple (subject, predicate, object) rather than just the predicate. Then Cell 14 only needs to validate, normalize, and store those triples as RDF. This separation makes the pipeline cleaner and easier to debug.
