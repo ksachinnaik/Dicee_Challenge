@@ -1,76 +1,172 @@
 # ==========================================================
-# Stage 6 : Sentence Extraction
-# Cell 8 : Locate Sentence Containing Hyperlink
+# Stage 6 : Sentence Matching
+# Cell 8 : Locate Sentence Containing Each Hyperlink
 # ==========================================================
-
 import re
+from pyspark.sql import Row
 
 print("=" * 80)
-print("SENTENCE EXTRACTION")
+print("SENTENCE MATCHING (Cell 8)")
 print("=" * 80)
 
+# ----------------------------------------------------------
+# Split Content into Sentences
+# ----------------------------------------------------------
+def split_into_sentences(content):
+    """
+    Split wiki/XML content into meaningful sentences.
+    Generic - works across all XML documents.
+    """
+    if not content:
+        return []
+        
+    # Remove code blocks {{code}}...{{/code}}
+    content = re.sub(r'\{\{code\}\}.*?\{\{/code\}\}', ' ', content, flags=re.DOTALL)
+    
+    # Remove macros: {{toc/}}, {{gallery}}...{{/gallery}}, {{putFootnotes}}
+    content = re.sub(r'\{\{[^\]]*?\}\}', ' ', content)
+    
+    # Remove style annotations (% ... %)
+    content = re.sub(r'\(\%.*?\%\)', ' ', content)
+    
+    # Replace section headers (== ... ==) with sentence boundaries
+    content = re.sub(r'==+', '.', content)
+    
+    # Replace wiki line breaks (\\) with spaces
+    content = re.sub(r'\\\\', ' ', content)
+    
+    # Split on sentence-ending punctuation
+    sentences = re.split(r'(?<=[.!?])\s+', content)
+    
+    # Filter out very short fragments (noise)
+    cleaned = []
+    for s in sentences:
+        s = s.strip()
+        if s and len(s) > 10:
+            cleaned.append(s)
+            
+    return cleaned
+
+# ----------------------------------------------------------
+# Clean Sentence Markdown
+# ----------------------------------------------------------
+def clean_sentence(sentence):
+    """Remove wiki markup from sentence for LLM readability."""
+    
+    # 1. [[Display>>Target]] -> Display
+    s = re.sub(r'\[\[(.*?)\>\>.*?\]\]', r'\1', sentence)
+    
+    # 2. [[Target]] (no display text) -> Target
+    # FIX: We replace it with the target name, NOT empty string, so the LLM knows what we are talking about!
+    s = re.sub(r'\[\[(.*?)\]\]', r'\1', s)
+    
+    # Remove ||anchor params
+    s = re.sub(r'\|\|[^\s]*', '', s)
+    
+    # Remove ((( and )))
+    s = s.replace('(((', '').replace(')))', '')
+    
+    # Remove bold/italic markers
+    s = s.replace('**', '').replace('*', '')
+    
+    # Remove orphan parentheses left empty
+    s = re.sub(r'\(\s*\)', '', s)
+    
+    # Collapse whitespace
+    s = re.sub(r'\s+', ' ', s).strip()
+    
+    return s
+
+# ----------------------------------------------------------
+# Match Each Hyperlink to Its Containing Sentence
+# ----------------------------------------------------------
 sentence_records = []
 
 for row in knowledge_nodes.toLocalIterator():
-
     node_id = row["node_id"]
     node_name = row["node_name"]
     content = row["node_content"] or ""
 
-    # ------------------------------------------------------
     # Split content into sentences
-    # ------------------------------------------------------
-
-    sentences = re.split(r'(?<=[.!?])\s+', content)
-
+    sentences = split_into_sentences(content)
+    
     for sentence in sentences:
-
-        # Find all wiki links inside the sentence
+        # Find all [[...]] links inside this sentence
         matches = re.findall(r"\[\[(.*?)\]\]", sentence)
-
+        
         if not matches:
             continue
-
+            
+        seen_in_sentence = set()
+        
         for raw in matches:
-
-            parsed = parse_link(raw)
-
+            # FIX: Handle links with AND without '>>'
+            if ">>" in raw:
+                display_text, target = raw.split(">>", 1)
+            else:
+                display_text = raw
+                target = raw
+                
+            display_text = display_text.strip()
+            parsed = parse_target(target) # Uses parse_target from Cell 7!
+            
             if parsed is None:
                 continue
-
+                
             link_type, target_reference = parsed
+            
+            # Deduplicate within same sentence
+            key = (target_reference, sentence)
+            if key in seen_in_sentence:
+                continue
+            seen_in_sentence.add(key)
+            
+            # Clean the sentence for the LLM
+            final_sentence = clean_sentence(sentence)
+            
+            # Store sentence + hyperlink together using PySpark Row
+            sentence_records.append(
+                Row(
+                    source_node=node_id,
+                    source_title=node_name,
+                    target_reference=target_reference,
+                    display_text=display_text,
+                    link_type=link_type,
+                    sentence=final_sentence
+                )
+            )
 
-            if ">>" in raw:
-                display_text = raw.split(">>")[0].strip()
-            else:
-                display_text = raw.strip()
+# ----------------------------------------------------------
+# Convert back to PySpark DataFrame
+# ----------------------------------------------------------
+if sentence_records:
+    sentences_df = spark.createDataFrame(sentence_records)
+else:
+    sentences_df = spark.createDataFrame([], schema="source_node string, source_title string, target_reference string, display_text string, link_type string, sentence string")
 
-            sentence_records.append({
+# ----------------------------------------------------------
+# Summary
+# ----------------------------------------------------------
+print()
+print("=" * 80)
+print("SENTENCE MATCHING SUMMARY")
+print("=" * 80)
 
-                "source_node": node_id,
-
-                "source_title": node_name,
-
-                "target_reference": target_reference,
-
-                "display_text": display_text,
-
-                "link_type": link_type,
-
-                "sentence": sentence.strip()
-
-            })
+print(f"Knowledge Nodes    : {knowledge_nodes.count()}")
+print(f"Sentence Records   : {len(sentence_records)}")
+print("(Ready for Cell 9 LLM Semantic Extraction)")
 
 print()
-
-print("=" * 80)
-print("SENTENCE RECORDS")
-print("=" * 80)
-
-print(f"Total Sentence Records : {len(sentence_records)}")
-
-print()
+print("-" * 80)
+print("SAMPLE SENTENCE RECORDS")
+print("-" * 80)
 
 for record in sentence_records[:10]:
+    print(f" Source   : {record['source_title']}")
+    print(f" Target   : {record['target_reference']}")
+    print(f" Display  : {record['display_text']}")
+    print(f" Type     : {record['link_type']}")
+    print(f" Sentence : {record['sentence'][:150]}...")
+    print()
 
-    print(record)
+display(sentences_df)
