@@ -11,48 +11,55 @@ print("SEMANTIC RELATIONSHIP EXTRACTION (Optimized)")
 print("=" * 80)
 
 # ----------------------------------------------------------
-# 1. Advanced System Prompt
+# 1. Advanced System Prompt (Using True XWiki Links)
 # ----------------------------------------------------------
-SYSTEM_PROMPT = """You are an advanced NLP system specialized in Knowledge Graph construction.
+SYSTEM_PROMPT = """You are an advanced NLP system specialized in Knowledge Graph construction for technical wiki documents.
 Your task is to analyze a single sentence and extract the precise semantic relationship (Predicate) connecting the Source Node to the Target Node.
 
 Rules for Extraction:
 1. Return EXACTLY ONE predicate. Do not write full sentences or explanations.
-2. Format as lowercase snake_case (e.g., depends_on, uses, part_of, defines).
-3. The predicate MUST represent how the Source is related to the Target based strictly on the sentence context.
-4. If the relationship is ambiguous or merely contextual, return 'mentions' or 'related_to'.
-5. Do NOT include any punctuation, quotes, or markdown. Just the snake_case string.
+2. Format as lowercase snake_case (e.g., depends_on, uses, part_of, defines, owned_by).
+3. The Target is usually an XWiki reference starting with "doc:" or "doc:wiki:". The sentence will contain this exact reference.
+4. You must infer the grammatical relationship between the Source and this Target reference.
+5. Avoid generic predicates like 'mentions' or 'related_to'. Look for the specific action or relationship in the sentence (e.g. "detailed in", "owned by").
+6. Do NOT include any punctuation, quotes, or markdown. Just the snake_case string.
 
 Examples:
 
 Source: Turbine Engineering
-Target: HotEnd Design
-Sentence: Turbine Engineering is a team within HotEnd Design.
+Target: doc:wiki:Temp_Import.HotEnd_Design.WebHome
+Sentence: Turbine Engineering is a team within doc:wiki:Temp_Import.HotEnd_Design.WebHome.
 Predicate: within
 
-Source: Engine Analysis
-Target: Solver
-Sentence: Engine Analysis depends on Solver to calculate thrust.
-Predicate: depends_on
+Source: MTCCM Help
+Target: doc:Temp_Import.a2373d33-22ff-11f1-8720-005056902ed8.WebHome
+Sentence: This artefact is owned by the doc:Temp_Import.a2373d33-22ff-11f1-8720-005056902ed8.WebHome team.
+Predicate: owned_by
 
-Source: 150Hr Endurance Test
-Target: Blocking
-Sentence: Blocking refers to the conduct of a 150Hr Endurance Test.
-Predicate: conducts
+Source: OpenTCCM
+Target: MATLAB
+Sentence: OpenTCCM uses MATLAB to calculate thrust.
+Predicate: uses
+
+Source: Endurance Test Blocking
+Target: doc:Temp_Import.034e8793-2332-11f1-8720-005056902ed8.WebHome
+Sentence: This rule is detailed in doc:Temp_Import.034e8793-2332-11f1-8720-005056902ed8.WebHome.
+Predicate: detailed_in
 """
 
 # ----------------------------------------------------------
-# 2. Worker Function (Processes a single row)
+# 2. Worker Function
 # ----------------------------------------------------------
 def process_record(record):
     source_title = record["source_title"]
     display_text = record["display_text"]
     sentence = record["sentence"]
     
+    # We pass the exact display text (even if it is doc:Temp_Import...) 
+    # directly to the LLM, since the Prompt now trains it how to read them!
     user_prompt = f"Source: {source_title}\nTarget: {display_text}\nSentence: {sentence}\nPredicate:"
     
     try:
-        # Call the LLM (llm object must be defined in Cell 14)
         response = llm.invoke([
             ("system", SYSTEM_PROMPT),
             ("human", user_prompt)
@@ -63,18 +70,17 @@ def process_record(record):
         # Aggressive Regex Clean: Keep ONLY letters and underscores
         predicate = re.sub(r'[^a-z_]', '', predicate.replace(' ', '_'))
         
-        # Validate: Fallback if LLM hallucinations a huge sentence
+        # Validate: Fallback if LLM hallucinates a huge sentence
         if not predicate or len(predicate) > 30:
             predicate = "related_to"
             
     except Exception as e:
-        # Fallback if API times out
         predicate = "related_to"
         
     return Row(
         subject=source_title,
         predicate=predicate,
-        object=display_text,
+        object=display_text, 
         subject_id=record["source_node"],
         object_id=record["target_reference"],
         sentence=sentence,
@@ -82,7 +88,7 @@ def process_record(record):
     )
 
 # ----------------------------------------------------------
-# 3. Concurrent Execution Engine (Lightning Fast)
+# 3. Concurrent Execution Engine
 # ----------------------------------------------------------
 def extract_all_predicates(df, max_threads=15):
     records_to_process = df.collect()
@@ -91,7 +97,6 @@ def extract_all_predicates(df, max_threads=15):
     
     results = []
     
-    # ThreadPoolExecutor runs multiple LLM calls simultaneously!
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = {executor.submit(process_record, rec): rec for rec in records_to_process}
         
@@ -100,7 +105,6 @@ def extract_all_predicates(df, max_threads=15):
             count += 1
             results.append(future.result())
             
-            # Print progress
             if count % 10 == 0 or count == total:
                 print(f"Processed {count} / {total} records")
                 
@@ -110,8 +114,6 @@ def extract_all_predicates(df, max_threads=15):
 # 4. Execute and Build Final RDF DataFrame
 # ----------------------------------------------------------
 semantic_records = extract_all_predicates(sentences_df)
-
-# Convert back to PySpark DataFrame
 rdf_df = spark.createDataFrame(semantic_records)
 
 print()
@@ -119,7 +121,6 @@ print("=" * 80)
 print("SAMPLE SEMANTIC TRIPLES")
 print("=" * 80)
 
-# Display a beautiful summary for verification
 display(
     rdf_df.select("subject", "predicate", "object", "sentence")
 )
