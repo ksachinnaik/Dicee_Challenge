@@ -1,77 +1,58 @@
 # ==========================================================
-# Stage 8 : Knowledge Graph Construction
-# Cell 11 : Build Knowledge Graph
+# Stage 9 : Knowledge Graph Construction
+# Cell 13 : Build Knowledge Graph from RDF Triples
 # ==========================================================
-
 import networkx as nx
 
 print("=" * 80)
-print("KNOWLEDGE GRAPH CONSTRUCTION")
+print("KNOWLEDGE GRAPH CONSTRUCTION (Cell 13)")
 print("=" * 80)
 
 # ----------------------------------------------------------
-# Create Directed Graph
+# 1. Create Directed Graph
 # ----------------------------------------------------------
-
 KG = nx.DiGraph()
 
 # ----------------------------------------------------------
-# Add Nodes and Edges
+# 2. Add Nodes and Edges from PySpark DataFrame
 # ----------------------------------------------------------
+# Bring the validated, distributed triples back to the driver memory
+print("Collecting validated RDF triples from cluster...")
+validated_triples = validated_rdf_df.collect()
 
-for triple in rdf_triples:
+print("Building NetworkX Graph...\n")
 
-    subject = triple["subject"]
-    object_node = triple["object"]
-
-    # -------------------------------
-    # Add Subject Node
-    # -------------------------------
-
+for row in validated_triples:
+    subject_ref = row["subject"]
+    object_ref = row["object"]
+    subject_title = row["subject_title"]
+    object_title = row["object_title"]
+    
+    # Add Subject Node (key = reference, attr = title)
     KG.add_node(
-
-        subject,
-
-        title=triple["subject_title"]
-
+        subject_ref,
+        title=subject_title
     )
-
-    # -------------------------------
-    # Add Object Node
-    # -------------------------------
-
+    
+    # Add Object Node (key = reference, attr = title)
     KG.add_node(
-
-        object_node,
-
-        title=triple["object_title"]
-
+        object_ref,
+        title=object_title
     )
-
-    # -------------------------------
-    # Add Semantic Edge
-    # -------------------------------
-
+    
+    # Add Semantic Edge (predicate)
+    # Storing the sentence here is great for GraphRAG context retrieval!
     KG.add_edge(
-
-        subject,
-
-        object_node,
-
-        predicate=triple["predicate"],
-
-        sentence=triple["sentence"],
-
-        link_type=triple["link_type"]
-
+        subject_ref,
+        object_ref,
+        predicate=row["predicate"],
+        sentence=row["sentence"],
+        link_type=row["link_type"]
     )
 
 # ----------------------------------------------------------
-# Graph Summary
+# 3. Graph Summary
 # ----------------------------------------------------------
-
-print()
-
 print("=" * 80)
 print("KNOWLEDGE GRAPH SUMMARY")
 print("=" * 80)
@@ -80,32 +61,31 @@ print(f"Total Nodes : {KG.number_of_nodes()}")
 print(f"Total Edges : {KG.number_of_edges()}")
 
 print()
+print("-" * 80)
+print("SAMPLE NODES (Reference -> Title)")
+print("-" * 80)
+
+# Display a few sample nodes
+sample_nodes = list(KG.nodes(data=True))[:10]
+for node, attr in sample_nodes:
+    print(f" Node  : {node}")
+    print(f" Title : {attr.get('title', 'N/A')}\n")
+
+print("-" * 80)
+print("SAMPLE EDGES (Subject, Predicate, Object)")
+print("-" * 80)
+
+# Display a few sample edges with human-readable titles
+sample_edges = list(KG.edges(data=True))[:10]
+for source, target, attr in sample_edges:
+    # Safely retrieve titles for display
+    src_title = KG.nodes[source].get('title', source)
+    tgt_title = KG.nodes[target].get('title', target)
+    predicate = attr.get('predicate', 'unknown')
+    
+    print(f" Display  : ({src_title}) --[{predicate}]--> ({tgt_title})")
+    print(f" Internal : ({source}) -> ({target})\n")
 
 print("=" * 80)
-print("Sample Nodes")
-print("=" * 80)
-
-for node, attr in list(KG.nodes(data=True))[:10]:
-
-    print(f"Node ID    : {node}")
-    print(f"Node Title : {attr.get('title')}")
-    print("-" * 60)
-
-print()
-
-print("=" * 80)
-print("Sample Edges")
-print("=" * 80)
-
-for source, target, attr in list(KG.edges(data=True))[:10]:
-
-    print(f"Source    : {KG.nodes[source]['title']}")
-    print(f"Predicate : {attr['predicate']}")
-    print(f"Target    : {KG.nodes[target]['title']}")
-    print("-" * 60)
-
-print()
-
-print("=" * 80)
-print("Knowledge Graph Successfully Created")
+print("Knowledge Graph Successfully Created!")
 print("=" * 80)
