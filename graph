@@ -1,0 +1,91 @@
+# ==========================================================
+# Stage 10 : Knowledge Graph Visualization
+# Cell 14 : Visualize Knowledge Graph (Titles for Display)
+# ==========================================================
+import matplotlib.pyplot as plt
+import networkx as nx
+import textwrap
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH VISUALIZATION (Cell 14)")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# Graph Statistics
+# ----------------------------------------------------------
+print(f"Total Nodes : {KG.number_of_nodes()}")
+print(f"Total Edges : {KG.number_of_edges()}")
+
+# ----------------------------------------------------------
+# Build Labels
+# ----------------------------------------------------------
+node_labels = {}
+for node, attr in KG.nodes(data=True):
+    # Get title, fallback to the raw reference if title is missing
+    raw_title = attr.get("title", node)
+    
+    # Textwrap ensures long titles don't spill out of the drawn nodes!
+    wrapped_title = textwrap.fill(str(raw_title), width=15)
+    node_labels[node] = wrapped_title
+
+edge_labels = {}
+for u, v, attr in KG.edges(data=True):
+    edge_labels[(u, v)] = attr.get("predicate", "")
+
+# ----------------------------------------------------------
+# Draw Graph
+# ----------------------------------------------------------
+# Use a high-resolution, large figure
+plt.figure(figsize=(20, 14), dpi=100)
+
+# k controls the distance between nodes (higher = more spread out)
+pos = nx.spring_layout(KG, seed=42, k=1.5)
+
+# Draw Nodes
+nx.draw_networkx_nodes(
+    KG, 
+    pos, 
+    node_size=3500, 
+    node_color="skyblue", 
+    edgecolors="black",
+    linewidths=1.5,
+    alpha=0.9
+)
+
+# Draw Node Labels
+nx.draw_networkx_labels(
+    KG, 
+    pos, 
+    labels=node_labels, 
+    font_size=9, 
+    font_weight="bold"
+)
+
+# Draw Edges
+nx.draw_networkx_edges(
+    KG, 
+    pos, 
+    arrows=True, 
+    arrowsize=20, 
+    width=2,
+    edge_color="gray",
+    alpha=0.7,
+    connectionstyle="arc3,rad=0.1" # slight curve so bidirectional edges don't overlap
+)
+
+# Draw Predicate Labels
+nx.draw_networkx_edge_labels(
+    KG, 
+    pos, 
+    edge_labels=edge_labels, 
+    font_size=9, 
+    font_color="darkred",
+    bbox=dict(alpha=0.8, edgecolor='none', facecolor='white') # Make labels pop
+)
+
+plt.title("Semantic Knowledge Graph", fontsize=24, fontweight="bold", pad=20)
+plt.axis("off")
+plt.tight_layout()
+
+# Render the graph!
+plt.show()
