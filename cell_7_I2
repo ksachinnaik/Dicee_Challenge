@@ -1,9 +1,10 @@
 # ==========================================================
 # Stage 5 : Hyperlink Extraction
-# Cell 7 : Extract XML Hyperlinks
+# Cell 7 : Extract XML Hyperlinks (Modified for Scalability)
 # ==========================================================
 
 import re
+from pyspark.sql import Row
 
 print("=" * 80)
 print("HYPERLINK EXTRACTION")
@@ -14,10 +15,8 @@ print("=" * 80)
 # ----------------------------------------------------------
 
 def normalize_reference(ref):
-
     if not ref:
         return None
-
     ref = ref.strip()
 
     # Remove anchor
@@ -36,49 +35,28 @@ def normalize_reference(ref):
 
     return ref.strip()
 
-
 # ----------------------------------------------------------
 # Parse Target Link
 # ----------------------------------------------------------
 
 def parse_target(target):
-
     target = target.strip()
 
     # -------- doc:wiki:Temp_Import --------
-
     if target.startswith("doc:wiki:"):
-
         return (
-
             "doc:wiki",
-
-            normalize_reference(
-
-                target[len("doc:wiki:"):]
-
-            )
-
+            normalize_reference(target[len("doc:wiki:"):])
         )
 
     # -------- doc:Temp_Import --------
-
     if target.startswith("doc:Temp_Import"):
-
         return (
-
             "doc:Temp_Import",
-
-            normalize_reference(
-
-                target[len("doc:"):]
-
-            )
-
+            normalize_reference(target[len("doc:"):])
         )
 
     return None
-
 
 # ----------------------------------------------------------
 # Hyperlink Extraction
@@ -87,83 +65,81 @@ def parse_target(target):
 hyperlink_records = []
 
 for row in knowledge_nodes.toLocalIterator():
-
     source_node = row["node_id"]
-
     source_title = row["node_name"]
-
     content = row["node_content"] or ""
 
     # Extract every [[...]]
     matches = re.findall(r"\[\[(.*?)\]\]", content)
-
     seen = set()
 
     for match in matches:
-
         # ----------------------------
         # Split Display >> Target
         # ----------------------------
-
         if ">>" not in match:
             continue
 
         display_text, target = match.split(">>", 1)
-
         display_text = display_text.strip()
-
         parsed = parse_target(target)
 
         if parsed is None:
             continue
 
         link_type, target_reference = parsed
-
         key = (target_reference, display_text)
 
         if key in seen:
             continue
-
         seen.add(key)
 
-        hyperlink_records.append({
+        # Added node_content here so Cell 8 can find the sentence!
+        # Used PySpark Row so we can convert to DataFrame easily.
+        hyperlink_records.append(
+            Row(
+                source_node=source_node,
+                source_title=source_title,
+                node_content=content,
+                display_text=display_text,
+                target_reference=target_reference,
+                link_type=link_type
+            )
+        )
 
-            "source_node": source_node,
-
-            "source_title": source_title,
-
-            "display_text": display_text,
-
-            "target_reference": target_reference,
-
-            "link_type": link_type
-
-        })
-
+# ----------------------------------------------------------
+# Convert back to PySpark DataFrame for Scalability 
+# ----------------------------------------------------------
+if hyperlink_records:
+    hyperlinks_df = spark.createDataFrame(hyperlink_records)
+else:
+    # Fallback if no links are found
+    hyperlinks_df = spark.createDataFrame([], schema="source_node string, source_title string, node_content string, display_text string, target_reference string, link_type string")
 
 # ----------------------------------------------------------
 # Summary
 # ----------------------------------------------------------
 
 print()
-
 print("=" * 80)
 print("HYPERLINK SUMMARY")
 print("=" * 80)
 
 print(f"Knowledge Nodes : {knowledge_nodes.count()}")
-
 print(f"Hyperlinks      : {len(hyperlink_records)}")
 
+print("(Passed to cell 8 for sentence matching)")
 print()
+print("-" * 80)
+print("SIMPLE HYPERLINKS")
+print("-" * 80)
 
-for record in hyperlink_records[:20]:
+# Fixed the string formatting syntax errors here
+for record in hyperlink_records[:10]:
+    print(f" Source   : {record['source_title']}")
+    print(f" Target   : {record['target_reference']}")
+    print(f" Display  : {record['display_text']}")
+    print(f" Type     : {record['link_type']}")
+    print()
 
-So the responsibility of Cell 8 is
-Read the XML content.
-Split the content into sentences.
-Find which sentence contains each extracted hyperlink.
-Store that sentence along with the hyperlink information.
-Pass the result to Cell 9 for semantic relationship extraction.
-
-    print(record)
+display(hyperlinks_df)
