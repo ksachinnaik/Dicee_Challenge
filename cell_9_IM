@@ -1,126 +1,88 @@
 # ==========================================================
-# Stage 6 : Semantic Relationship Extraction
-# Cell 9 : Extract Semantic Relationship
+# Stage 7 : Semantic Relationship Extraction
+# Cell 11 : Extract Semantic Relationship (Predicate)
 # ==========================================================
+from pyspark.sql.types import StringType
+from pyspark.sql import functions as F
+from langchain_openai import ChatOpenAI
 
 print("=" * 80)
-print("SEMANTIC RELATIONSHIP EXTRACTION")
+print("SEMANTIC RELATIONSHIP EXTRACTION (LLM)")
 print("=" * 80)
 
-SYSTEM_PROMPT = """
-You are an expert Knowledge Graph relation extraction system.
+# ----------------------------------------------------------
+# 1. Capture Driver Variables for Worker Nodes
+# ----------------------------------------------------------
+# Spark workers need these variables, so we capture them here.
+driver_token = DATABRICKS_TOKEN
+driver_deployment = DEPLOYMENT_NAME
+driver_base_url = "https://adb-395568870984.4.azuredatabricks.net/serving-endpoints"
 
-Your task is to build RDF triples.
-
-You will receive:
-
-1. Source XML page title.
-2. One sentence from that page.
-3. The hyperlink text.
-4. The target XML reference.
-
-Extract ONLY the semantic relationship that connects the
-Source XML page to the hyperlink.
-
-Rules:
-
-- Return ONE predicate only.
-- lowercase
-- snake_case
-- no explanation
-- no punctuation
-- do not return complete sentences
-- ignore hyperlink syntax such as doc:, doc:wiki:, doc:Temp_Import
-- infer the relationship only from the sentence
-- if no relationship is clear return:
-related_to
-
-Examples
-
-"Turbine Engineering is a team within HotEnd Design."
-
-Output:
-within
-
-"Engine Analysis depends on Solver."
-
-Output:
-depends_on
-
-"OpenTCCM uses MATLAB."
-
-Output:
-uses
-
-"The document describes Blade Design."
-
-Output:
-describes
-"""
-
-semantic_records = []
-
-for record in sentence_records:
-
-    prompt = f"""
-Source XML:
-{record['source_title']}
-
-Sentence:
-{record['sentence']}
-
-Hyperlink:
-{record['display_text']}
-
-Target XML:
-{record['target_reference']}
-"""
-
+# ----------------------------------------------------------
+# 2. Define the LLM Extraction Logic
+# ----------------------------------------------------------
+def extract_predicate(source_title, display_text, clean_sentence):
+    # Fallback if sentence is empty
+    if not clean_sentence:
+        return "mentions"
+        
     try:
-
-        response = llm.invoke(
-            [
-                ("system", SYSTEM_PROMPT),
-                ("human", prompt)
-            ]
+        # Initialize LLM directly inside the worker task
+        worker_llm = ChatOpenAI(
+            model=driver_deployment,
+            base_url=driver_base_url,
+            api_key=driver_token,
+            temperature=0
         )
+        
+        # Design a strict prompt for Graph Extraction
+        prompt = f"""You are an expert at extracting semantic relationships for a Knowledge Graph.
+Given a Source Entity, a Target Entity, and a Sentence, extract the semantic relationship (Predicate) connecting them.
+The Predicate should be a short, concise snake_case phrase (e.g., 'within', 'depends_on', 'uses', 'part_of').
+If no clear relationship is found, return 'mentions'.
+Respond ONLY with the Predicate phrase. No quotes, no markdown, no other text.
 
-        predicate = (
-            response.content
-            .strip()
-            .lower()
-            .replace(" ", "_")
+Source: {source_title}
+Target: {display_text}
+Sentence: {clean_sentence}
+Predicate:"""
+
+        # Call the LLM
+        response = worker_llm.invoke([("human", prompt)])
+        predicate = response.content.strip().lower()
+        
+        # Clean up any accidental punctuation returned by the LLM
+        predicate = predicate.replace("'", "").replace('"', "").replace(" ", "_")
+        
+        return predicate
+        
+    except Exception as e:
+        # If the LLM endpoint fails/times out, default to a generic edge
+        return "mentions"
+
+# Register the PySpark UDF
+extract_predicate_udf = F.udf(extract_predicate, StringType())
+
+# ----------------------------------------------------------
+# 3. Apply LLM UDF Across the Spark Cluster
+# ----------------------------------------------------------
+# This will process in parallel across your cluster!
+rdf_df = (
+    sentences_df
+    .withColumn(
+        "predicate",
+        extract_predicate_udf(
+            F.col("source_title"),
+            F.col("display_text"),
+            F.col("sentence")
         )
+    )
+)
 
-    except Exception:
-
-        predicate = "related_to"
-
-    semantic_records.append({
-
-        "subject": record["source_node"],
-
-        "subject_title": record["source_title"],
-
-        "predicate": predicate,
-
-        "object": record["target_reference"],
-
-        "object_title": record["display_text"],
-
-        "sentence": record["sentence"],
-
-        "link_type": record["link_type"]
-
-    })
-
-print("=" * 80)
-print("SEMANTIC RELATIONSHIP SUMMARY")
-print("=" * 80)
-
-print(f"Relationships Extracted : {len(semantic_records)}")
-
+print(f"Total Predicates Extracted : {rdf_df.count()}")
 print()
 
-for row in semantic_records[:10]:
-    print(row)
+# View the final Subject, Predicate, Object structure!
+display(
+    rdf_df.select("source_title", "predicate", "display_text", "sentence")
+)
