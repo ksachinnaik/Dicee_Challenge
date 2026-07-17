@@ -1,6 +1,6 @@
 # ==========================================================
 # Stage 5 : Hyperlink Extraction
-# Cell 7 : Extract XML Hyperlinks (Modified for Scalability)
+# Cell 7 : Extract XML Hyperlinks (FIXED FOR ALL LINKS)
 # ==========================================================
 
 import re
@@ -19,7 +19,7 @@ def normalize_reference(ref):
         return None
     ref = ref.strip()
 
-    # Remove anchor
+    # Remove anchor (e.g. ||anchor="Subject_Matter...")
     if "||" in ref:
         ref = ref.split("||")[0]
 
@@ -77,10 +77,13 @@ for row in knowledge_nodes.toLocalIterator():
         # ----------------------------
         # Split Display >> Target
         # ----------------------------
-        if ">>" not in match:
-            continue
+        # FIX: Handle links WITH and WITHOUT '>>'
+        if ">>" in match:
+            display_text, target = match.split(">>", 1)
+        else:
+            display_text = match
+            target = match
 
-        display_text, target = match.split(">>", 1)
         display_text = display_text.strip()
         parsed = parse_target(target)
 
@@ -94,8 +97,7 @@ for row in knowledge_nodes.toLocalIterator():
             continue
         seen.add(key)
 
-        # Added node_content here so Cell 8 can find the sentence!
-        # Used PySpark Row so we can convert to DataFrame easily.
+        # Include node_content so Cell 8 can locate the sentence!
         hyperlink_records.append(
             Row(
                 source_node=source_node,
@@ -108,7 +110,7 @@ for row in knowledge_nodes.toLocalIterator():
         )
 
 # ----------------------------------------------------------
-# Convert back to PySpark DataFrame for Scalability 
+# Convert back to PySpark DataFrame
 # ----------------------------------------------------------
 if hyperlink_records:
     hyperlinks_df = spark.createDataFrame(hyperlink_records)
@@ -127,14 +129,13 @@ print("=" * 80)
 
 print(f"Knowledge Nodes : {knowledge_nodes.count()}")
 print(f"Hyperlinks      : {len(hyperlink_records)}")
-
 print("(Passed to cell 8 for sentence matching)")
+
 print()
 print("-" * 80)
 print("SIMPLE HYPERLINKS")
 print("-" * 80)
 
-# Fixed the string formatting syntax errors here
 for record in hyperlink_records[:10]:
     print(f" Source   : {record['source_title']}")
     print(f" Target   : {record['target_reference']}")
