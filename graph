@@ -89,3 +89,114 @@ plt.tight_layout()
 
 # Render the graph!
 plt.show()
+
+
+----------------------------------
+
+
+# ==========================================================
+# Stage 10 : Knowledge Graph Visualization
+# Cell 14 : Visualize Knowledge Graph (Advanced Aesthetic)
+# ==========================================================
+import matplotlib.pyplot as plt
+import networkx as nx
+import textwrap
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH VISUALIZATION (Cell 14)")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# 1. Analyze Graph for Dynamic Sizing & Colors
+# ----------------------------------------------------------
+# Calculate how many connections each node has
+node_degrees = dict(KG.degree())
+
+node_colors = []
+node_sizes = []
+
+for node in KG.nodes():
+    degree = node_degrees[node]
+    
+    # Dynamic Sizing: Base size 2000, plus 500 for every connection
+    node_sizes.append(2000 + (degree * 500))
+    
+    # Dynamic Coloring: Hubs are Coral, Intermediates are Green, Leaves are Blue
+    if degree >= 5:
+        node_colors.append("coral")       # Major Hubs
+    elif degree >= 2:
+        node_colors.append("lightgreen")  # Connectors
+    else:
+        node_colors.append("skyblue")     # Leaf nodes
+
+# ----------------------------------------------------------
+# 2. Build Labels (with text wrapping)
+# ----------------------------------------------------------
+node_labels = {}
+for node, attr in KG.nodes(data=True):
+    raw_title = attr.get("title", node)
+    node_labels[node] = textwrap.fill(str(raw_title), width=12)
+
+edge_labels = {}
+for u, v, attr in KG.edges(data=True):
+    edge_labels[(u, v)] = attr.get("predicate", "")
+
+# ----------------------------------------------------------
+# 3. Draw Advanced Graph
+# ----------------------------------------------------------
+plt.figure(figsize=(22, 16), dpi=120)
+
+# Kamada-Kawai creates beautiful, organic, non-circular webs!
+pos = nx.kamada_kawai_layout(KG)
+
+# Draw Nodes (using our dynamic sizes and colors)
+nx.draw_networkx_nodes(
+    KG, 
+    pos, 
+    node_size=node_sizes, 
+    node_color=node_colors, 
+    edgecolors="black",
+    linewidths=1.2,
+    alpha=0.95
+)
+
+# Draw Node Labels
+nx.draw_networkx_labels(
+    KG, 
+    pos, 
+    labels=node_labels, 
+    font_size=8, 
+    font_weight="bold",
+    font_family="sans-serif"
+)
+
+# Draw Edges (Clean and thin like the reference picture)
+nx.draw_networkx_edges(
+    KG, 
+    pos, 
+    arrows=True, 
+    arrowsize=15, 
+    width=1.5,
+    edge_color="darkgray",
+    alpha=0.8,
+    node_size=node_sizes, # Helps arrows stop exactly at the edge of the circle
+    connectionstyle="arc3,rad=0.05" 
+)
+
+# Draw Predicate Labels
+nx.draw_networkx_edge_labels(
+    KG, 
+    pos, 
+    edge_labels=edge_labels, 
+    font_size=8, 
+    font_color="black",
+    label_pos=0.5,
+    bbox=dict(alpha=0.9, edgecolor='none', facecolor='white', pad=1)
+)
+
+plt.title("Semantic Knowledge Graph", fontsize=28, fontweight="bold", pad=20)
+plt.axis("off")
+plt.tight_layout()
+
+# Render the masterpiece
+plt.show()
