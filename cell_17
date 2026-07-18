@@ -1,6 +1,6 @@
 # ==========================================================
 # Stage 12: GraphRAG Online Phase (Retriever)
-# Cell 17: Context Builder & Prompt Construction
+# Cell 17: Context Builder (Edges + Raw Text)
 # ==========================================================
 
 print("=" * 80)
@@ -8,40 +8,38 @@ print("GRAPHRAG ONLINE: CONTEXT BUILDER")
 print("=" * 80)
 
 # ----------------------------------------------------------
-# 1. Build Readable Context from Graph Edges
+# 1. Get the Raw Text of the Start Nodes!
 # ----------------------------------------------------------
-context_lines = []
+node_texts = []
+for n in start_nodes:
+    title = KG.nodes[n].get('title', n)
+    # Pull the entire raw XML content from the node
+    raw_content = KG.nodes[n].get('content', '')
+    node_texts.append(f"DOCUMENT TITLE: {title}\nDOCUMENT CONTENT:\n{raw_content}")
 
+FULL_NODE_CONTEXT = "\n\n".join(node_texts)
+
+# ----------------------------------------------------------
+# 2. Build Readable Context from Graph Edges
+# ----------------------------------------------------------
+edge_lines = []
 for idx, (u, v, attr) in enumerate(retrieved_edges, 1):
     src_title = str(KG.nodes[u].get('title', u))
     tgt_title = str(KG.nodes[v].get('title', v))
-    
-    # Clean up the predicate (e.g. 'owned_and_maintained_by' -> 'owned and maintained by')
     predicate = str(attr.get('predicate', 'related to')).replace("_", " ")
-    
-    # We construct the clean sentence exactly as recommended in your PDF
     structured_fact = f"{src_title} {predicate} {tgt_title}."
-    
-    # We also include the original XML sentence for maximum LLM accuracy!
-    original_sentence = attr.get('sentence', '')
-    
-    # Format: 1. Fact. (Evidence: original sentence)
-    context_lines.append(f"{idx}. {structured_fact} (Evidence: {original_sentence})")
+    edge_lines.append(f"{idx}. {structured_fact}")
 
-# Join all lines into one big context block
-GRAPH_CONTEXT = "\n\n".join(context_lines)
+GRAPH_EDGE_CONTEXT = "\n".join(edge_lines)
 
-print("Constructed Knowledge Graph Context:")
-print("-" * 80)
-print(GRAPH_CONTEXT[:1000] + "...\n[Context Truncated for Display]")
-print("-" * 80)
-print()
+print("Context successfully built!")
 
 # ----------------------------------------------------------
-# 2. Prompt Construction (Exactly from your PDF!)
+# 3. Prompt Construction
 # ----------------------------------------------------------
 SYSTEM_PROMPT = """You are an expert technical assistant. 
-Answer the user's question ONLY using the retrieved Knowledge Graph context provided below. 
+Answer the user's question using the retrieved Knowledge Graph context provided below. 
+The context contains both Raw Document Text and Structural Graph Relationships.
 If the answer is not present in the context, simply say that the information is unavailable."""
 
 FINAL_PROMPT = f"""
@@ -49,8 +47,12 @@ Question:
 {USER_QUERY}
 
 ---------------------------------------
-Knowledge Graph Context:
-{GRAPH_CONTEXT}
+RAW DOCUMENT TEXT:
+{FULL_NODE_CONTEXT}
+
+---------------------------------------
+GRAPH RELATIONSHIPS:
+{GRAPH_EDGE_CONTEXT}
 """
 
 print("Prompt successfully constructed! Ready for Cell 18 (LLM).")
