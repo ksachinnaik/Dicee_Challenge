@@ -1,7 +1,8 @@
 # ==========================================================
 # Stage 12: GraphRAG Online Phase (Retriever)
-# Cell 17: Context Builder (Edges + Raw Text)
+# Cell 17: Context Builder (Edges + Raw Text & Clean IDs)
 # ==========================================================
+import re
 
 print("=" * 80)
 print("GRAPHRAG ONLINE: CONTEXT BUILDER")
@@ -20,13 +21,26 @@ for n in start_nodes:
 FULL_NODE_CONTEXT = "\n\n".join(node_texts)
 
 # ----------------------------------------------------------
-# 2. Build Readable Context from Graph Edges
+# 2. Build Readable Context from Graph Edges (with ID cleanup)
 # ----------------------------------------------------------
 edge_lines = []
 for idx, (u, v, attr) in enumerate(retrieved_edges, 1):
     src_title = str(KG.nodes[u].get('title', u))
     tgt_title = str(KG.nodes[v].get('title', v))
+    
+    # NEW: Aggressively clean up missing titles that are just raw 'doc:' IDs
+    if "doc:" in tgt_title:
+        # Extract the last part of the ID string
+        tgt_title = tgt_title.split(".")[-1].replace("WebHome", "").strip()
+        # Keep only letters and spaces using Regex
+        tgt_title = re.sub(r'[^a-zA-Z\s]', '', tgt_title).strip()
+        # If it is totally empty after cleaning, use a safe fallback
+        if not tgt_title: 
+            tgt_title = "an external document"
+
+    # Clean up the predicate text
     predicate = str(attr.get('predicate', 'related to')).replace("_", " ")
+    
     structured_fact = f"{src_title} {predicate} {tgt_title}."
     edge_lines.append(f"{idx}. {structured_fact}")
 
