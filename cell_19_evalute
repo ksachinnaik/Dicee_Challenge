@@ -1,0 +1,89 @@
+# ==========================================================
+# Stage 13: MLflow Evaluation
+# Cell 19: Evaluate GraphRAG using Databricks MLflow
+# ==========================================================
+import mlflow
+import pandas as pd
+import re
+
+print("=" * 80)
+print("EVALUATING GRAPHRAG WITH MLFLOW")
+print("=" * 80)
+
+# 1. Create a small evaluation dataset of the questions you just tested
+eval_df = pd.DataFrame([
+    {"request": "What happens if I accidentally save changes to the OpenTCCM model after browsing or editing?"},
+    {"request": "Why is a p-diagram typically created early in the design process?"},
+    {"request": "What are the main elements included in a p-diagram according to systems engineering practice?"}
+])
+
+# 2. Define a function that acts as the Retriever for MLflow
+def mlflow_graph_retriever(question):
+    # Extract keywords
+    q_keywords = set(re.findall(r'[a-z0-9]+', str(question).lower())) - STOPWORDS
+    
+    # Find start nodes
+    scores = []
+    for n, attr in KG.nodes(data=True):
+        overlap = len(q_keywords.intersection(get_keywords(attr.get('title', ''))))
+        if overlap > 0: scores.append((n, overlap))
+            
+    scores.sort(key=lambda x: x[1], reverse=True)
+    start_nodes = [s[0] for s in scores[:3]]
+    
+    # Hop 1 Traversal
+    retrieved_edges = []
+    visited = set()
+    for current_node in start_nodes:
+        for neighbor in KG.successors(current_node):
+            if (current_node, neighbor) not in visited:
+                visited.add((current_node, neighbor))
+                edge_data = KG.get_edge_data(current_node, neighbor)
+                retrieved_edges.append((current_node, neighbor, edge_data))
+                
+    # Format the output EXACTLY how MLflow expects it ("doc_uri" and "content")
+    context_chunks = []
+    for u, v, attr in retrieved_edges[:10]:
+        src_title = str(KG.nodes[u].get('title', u))
+        tgt_title = str(KG.nodes[v].get('title', v))
+        predicate = str(attr.get('predicate', 'related to')).replace("_", " ")
+        fact = f"{src_title} {predicate} {tgt_title}."
+        
+        context_chunks.append({
+            "doc_uri": str(u),
+            "content": fact
+        })
+        
+    return context_chunks
+
+# Apply the retriever to our evaluation questions
+print("Running Graph Retriever on evaluation dataset...")
+eval_df["retrieved_context"] = eval_df["request"].apply(mlflow_graph_retriever)
+
+# 3. Run MLflow evaluate (Exactly like your colleague's code!)
+print("\nStarting MLflow Run to grade the Retriever...")
+with mlflow.start_run(run_name="GraphRAG_Retriever_Evaluation"):
+    
+    eval_data = eval_df.to_dict(orient="records")
+    
+    try:
+        results = mlflow.evaluate(
+            data=eval_data,
+            model_type="databricks-agent", 
+            evaluator_config={
+                "databricks-agent": {
+                    # This tells the Databricks LLM Judge to grade our Graph Context!
+                    "metrics": ["chunk_relevance"] 
+                }
+            }
+        )
+        
+        print("=" * 80)
+        print("MLFLOW EVALUATION COMPLETE")
+        print("=" * 80)
+
+        # This displays the exact same MLflow table UI your colleague got!
+        display(results.tables["eval_results"])
+        
+    except Exception as e:
+        print(f"MLflow Evaluation Failed: {e}\n(Make sure your Databricks environment has MLflow Agent Evaluation enabled)")
