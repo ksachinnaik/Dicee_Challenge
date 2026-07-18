@@ -56,8 +56,8 @@ SYSTEM_PROMPT = """You are an expert technical assistant.
 CRITICAL RULES:
 1. You must answer the user's question ONLY using the retrieved Knowledge Graph context provided below. Do NOT use your own outside training knowledge.
 2. If the 'GRAPH RELATIONSHIPS' and 'RAW DOCUMENT TEXT' sections are completely empty, you MUST reply with exactly: "The information is unavailable in the Knowledge Graph."
-3. However, if the context IS present (even if it seems partial or uses ID numbers instead of names), you must try your best to synthesize an answer based on whatever Graph Relationships are available."""
-
+3. If the context IS present, you must be highly analytical. Do NOT simply say the exact answer is missing. You MUST synthesize a deep, detailed answer based on whatever Graph Relationships and Text are available. 
+4. Make logical inferences from the edges (e.g., if A 'opens' B, or is 'lost_if_uninstalled' by B, explain how they depend on each other). Explain everything the graph shows about the topic in detail!"""
 FINAL_PROMPT = f"""
 Question:
 {USER_QUERY}
