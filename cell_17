@@ -54,7 +54,11 @@ print("Context successfully built!")
 SYSTEM_PROMPT = """You are an expert technical assistant. 
 Answer the user's question using the retrieved Knowledge Graph context provided below. 
 The context contains both Raw Document Text and Structural Graph Relationships.
-If the answer is not present in the context, simply say that the information is unavailable."""
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT simply say the information is unavailable. 
+2. If the exact answer is missing, you MUST synthesize a partial answer based on whatever Graph Relationships are available.
+3. Explain to the user exactly what the graph structure shows, even if the target document names are missing or look like IDs."""
 
 FINAL_PROMPT = f"""
 Question:
