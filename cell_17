@@ -52,13 +52,11 @@ print("Context successfully built!")
 # 3. Prompt Construction
 # ----------------------------------------------------------
 SYSTEM_PROMPT = """You are an expert technical assistant. 
-Answer the user's question using the retrieved Knowledge Graph context provided below. 
-The context contains both Raw Document Text and Structural Graph Relationships.
 
-CRITICAL INSTRUCTIONS:
-1. Do NOT simply say the information is unavailable. 
-2. If the exact answer is missing, you MUST synthesize a partial answer based on whatever Graph Relationships are available.
-3. Explain to the user exactly what the graph structure shows, even if the target document names are missing or look like IDs."""
+CRITICAL RULES:
+1. You must answer the user's question ONLY using the retrieved Knowledge Graph context provided below. Do NOT use your own outside training knowledge.
+2. If the 'GRAPH RELATIONSHIPS' and 'RAW DOCUMENT TEXT' sections are completely empty, you MUST reply with exactly: "The information is unavailable in the Knowledge Graph."
+3. However, if the context IS present (even if it seems partial or uses ID numbers instead of names), you must try your best to synthesize an answer based on whatever Graph Relationships are available."""
 
 FINAL_PROMPT = f"""
 Question:
