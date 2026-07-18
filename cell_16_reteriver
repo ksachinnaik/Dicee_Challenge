@@ -73,3 +73,105 @@ for u, v, attr in retrieved_edges[:10]:
     predicate = attr.get('predicate', 'related_to')
     
     print(f"({src_title}) --[{predicate}]--> ({tgt_title})")
+
+----------------------------------------------------------------------
+
+# ==========================================================
+# Stage 12: GraphRAG Online Phase (Retriever)
+# Cell 16: Query Understanding & Dynamic Graph Traversal
+# ==========================================================
+import networkx as nx
+import re
+
+print("=" * 80)
+print("GRAPHRAG ONLINE: DYNAMIC GRAPH TRAVERSAL")
+print("=" * 80)
+
+USER_QUERY = "How can a new Test Environment be created in the application?"
+print(f"User Query: {USER_QUERY}\n")
+
+# ----------------------------------------------------------
+# 1. Query Understanding (NLP Keyword Intersection)
+# ----------------------------------------------------------
+STOPWORDS = {"how", "can", "a", "new", "be", "created", "in", "the", "what", "is", "of", "to", "and", "for", "on", "it", "does", "typically", "why"}
+
+def get_keywords(text):
+    tokens = set(re.findall(r'[a-z0-9]+', str(text).lower()))
+    return tokens - STOPWORDS
+
+query_keywords = get_keywords(USER_QUERY)
+print(f"Extracted Query Keywords: {query_keywords}\n")
+
+node_scores = []
+for node, attr in KG.nodes(data=True):
+    title = attr.get('title', '')
+    title_keywords = get_keywords(title)
+    
+    overlap = len(query_keywords.intersection(title_keywords))
+    if overlap > 0:
+        node_scores.append((node, title, overlap))
+
+node_scores.sort(key=lambda x: x[2], reverse=True)
+start_nodes = [n[0] for n in node_scores[:3]]
+
+print(f"Start Nodes Detected: {len(start_nodes)}")
+for n in node_scores[:3]:
+    print(f" - {n[1]}")
+print()
+
+# ----------------------------------------------------------
+# 2. Dynamic Graph Traversal (Hop 1, Hop 2, Fallback Hop 3)
+# ----------------------------------------------------------
+retrieved_edges = []
+visited_edges = set()
+
+def explore_hop(nodes_to_explore):
+    """Explores exactly 1 hop out from a list of nodes and returns the new neighbors."""
+    next_level_nodes = set()
+    for current_node in nodes_to_explore:
+        for neighbor in KG.successors(current_node):
+            edge_tuple = (current_node, neighbor)
+            
+            # Make sure we don't visit the same edge twice
+            if edge_tuple not in visited_edges:
+                visited_edges.add(edge_tuple)
+                edge_data = KG.get_edge_data(current_node, neighbor)
+                retrieved_edges.append((current_node, neighbor, edge_data))
+                next_level_nodes.add(neighbor)
+                
+    return list(next_level_nodes)
+
+print("Starting Dynamic Graph Traversal...\n")
+
+# -- HOP 1 --
+hop_1_nodes = explore_hop(start_nodes)
+print(f"Hop 1 : Found {len(hop_1_nodes)} connected documents.")
+
+# -- HOP 2 --
+hop_2_nodes = explore_hop(hop_1_nodes)
+print(f"Hop 2 : Found {len(hop_2_nodes)} deeper documents.")
+
+# -- HOP 3 (Fallback Condition) --
+# If Hops 1 and 2 didn't find enough context (e.g. less than 5 edges total), we expand!
+if len(retrieved_edges) < 5:
+    print("\n[WARNING] Hops 1 & 2 did not find much context. Expanding search to Hop 3...")
+    hop_3_nodes = explore_hop(hop_2_nodes)
+    print(f"Hop 3 : Found {len(hop_3_nodes)} even deeper documents.")
+else:
+    print("\n[SUCCESS] Hops 1 & 2 found plenty of context! Skipping Hop 3 to keep the LLM focused.")
+
+print(f"\nTraversal Complete! Retrieved {len(retrieved_edges)} total semantic relationships.\n")
+
+# ----------------------------------------------------------
+# 3. Show Retrieved Raw Paths
+# ----------------------------------------------------------
+print("-" * 80)
+print("RAW RETRIEVED GRAPH PATHS")
+print("-" * 80)
+
+for u, v, attr in retrieved_edges[:10]:
+    src_title = KG.nodes[u].get('title', u)
+    tgt_title = KG.nodes[v].get('title', v)
+    predicate = attr.get('predicate', 'related_to')
+    
+    print(f"({src_title}) --[{predicate}]--> ({tgt_title})")
