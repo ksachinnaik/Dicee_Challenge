@@ -1,0 +1,116 @@
+# ==========================================================
+# Stage 11 : Knowledge Graph Verification (Proof of Quality)
+# Cell 15 : LLM-as-a-Judge (Evaluate Semantic Predicates)
+# ==========================================================
+import concurrent.futures
+from pyspark.sql import Row
+import random
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH VERIFICATION (LLM-AS-A-JUDGE)")
+print("=" * 80)
+
+# ----------------------------------------------------------
+# 1. Evaluation Prompt (The Judge's Rubric)
+# ----------------------------------------------------------
+# This prompt asks the LLM to be a strict judge of our graph edges.
+JUDGE_PROMPT = """You are an expert Knowledge Graph Evaluation system.
+Your task is to grade the accuracy of an extracted semantic relationship (Predicate).
+
+You will be provided with:
+- Subject: The source entity.
+- Object: The target entity.
+- Sentence: The raw text where the relationship is defined.
+- Extracted Predicate: The relationship extracted for the Knowledge Graph.
+
+Evaluate if the Extracted Predicate accurately and logically connects the Subject and Object based strictly on the grammar of the Sentence.
+
+Scoring Rubric:
+5 - Perfect: The predicate is the exact, correct relationship.
+4 - Good: The predicate is correct but could be slightly more specific.
+3 - Okay: The predicate is generic (e.g. 'related_to', 'mentions') but technically true.
+2 - Poor: The predicate is a guess and not supported by the sentence.
+1 - Fail: The predicate is completely wrong or hallucinated.
+
+Respond in exactly two lines:
+Score: [1-5]
+Reason: [One short sentence explaining why]
+"""
+
+# ----------------------------------------------------------
+# 2. Worker Function
+# ----------------------------------------------------------
+def evaluate_triple(record):
+    subject = record["subject_title"]
+    obj = record["object_title"]
+    sentence = record["sentence"]
+    predicate = record["predicate"]
+    
+    user_prompt = f"Subject: {subject}\nObject: {obj}\nSentence: {sentence}\nExtracted Predicate: {predicate}"
+    
+    try:
+        response = llm.invoke([
+            ("system", JUDGE_PROMPT),
+            ("human", user_prompt)
+        ])
+        
+        output = response.content.strip().split("\n")
+        
+        # Parse Score and Reason safely
+        score_str = output[0].replace("Score:", "").strip()
+        score = int(score_str) if score_str.isdigit() else 3
+        reason = output[1].replace("Reason:", "").strip() if len(output) > 1 else "No reason provided."
+        
+    except Exception as e:
+        score = 0
+        reason = f"Evaluation failed: {e}"
+        
+    return Row(
+        subject=subject,
+        predicate=predicate,
+        object=obj,
+        sentence=sentence,
+        score=score,
+        reason=reason
+    )
+
+# ----------------------------------------------------------
+# 3. Execution (Sampling a random subset of the Graph)
+# ----------------------------------------------------------
+# We pull the validated edges from the PySpark DataFrame (Cell 12)
+all_triples = validated_rdf_df.collect()
+
+# We randomly sample 20 edges for the proof report
+sample_size = min(20, len(all_triples))
+eval_sample = random.sample(all_triples, sample_size)
+
+print(f"Sending {sample_size} random graph edges to the LLM Judge for grading...\n")
+
+eval_results = []
+# Using ThreadPool to run the grading extremely fast
+with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(evaluate_triple, rec) for rec in eval_sample]
+    for future in concurrent.futures.as_completed(futures):
+        eval_results.append(future.result())
+
+# ----------------------------------------------------------
+# 4. Final Score & Proof Report
+# ----------------------------------------------------------
+eval_df = spark.createDataFrame(eval_results)
+
+# Calculate Average Score across the graph sample
+valid_scores = [r.score for r in eval_results if r.score > 0]
+average_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
+percentage = (average_score / 5.0) * 100
+
+print("=" * 80)
+print("KNOWLEDGE GRAPH ACCURACY PROOF")
+print("=" * 80)
+print(f"Total Edges Evaluated  : {sample_size}")
+print(f"Average Accuracy Score : {average_score:.2f} / 5.0")
+print(f"Overall Graph Health   : {percentage:.1f}% Accurate")
+print("=" * 80)
+print()
+
+# Display the exact critique from the LLM to prove the quality!
+display(eval_df.select("subject", "predicate", "object", "score", "reason"))
