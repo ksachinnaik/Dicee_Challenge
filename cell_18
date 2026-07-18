@@ -1,0 +1,33 @@
+# ==========================================================
+# Stage 12: GraphRAG Online Phase (Retriever)
+# Cell 18: Generate Answer using LLM
+# ==========================================================
+
+print("=" * 80)
+print("GRAPHRAG ONLINE: FINAL LLM ANSWER")
+print("=" * 80)
+
+print("Sending Knowledge Graph Context to Azure OpenAI...\n")
+
+try:
+    # We use the 'llm' object that you already initialized!
+    # It passes the strict System Rules and the Context block.
+    response = llm.invoke([
+        ("system", SYSTEM_PROMPT),
+        ("human", FINAL_PROMPT)
+    ])
+    
+    # Extract the clean text answer from the LangChain response
+    final_answer = response.content.strip()
+    
+    # Print the beautiful final result!
+    print("-" * 80)
+    print("USER QUESTION:")
+    print(USER_QUERY)
+    print("-" * 80)
+    print("GRAPHRAG ANSWER:")
+    print(final_answer)
+    print("-" * 80)
+    
+except Exception as e:
+    print(f"Error calling LLM: {e}")
