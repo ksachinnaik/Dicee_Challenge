@@ -1,0 +1,74 @@
+# ==========================================================
+# Cell 16: Top-K Document Retrieval (No LLM)
+# ==========================================================
+import re
+
+def retrieve_candidates(graph_index, query, top_k=10):
+    query_lower = query.lower()
+    words = re.findall(r'\b\w+\b', query_lower)
+    stop_words = {"what", "why", "is", "a", "the", "in", "of", "and", "to", "for", "on", "with", "does", "how", "can"}
+    query_keywords = {w for w in words if w not in stop_words and len(w) > 2}
+    
+    candidates = []
+    
+    for node, attr in graph_index.nodes(data=True):
+        content = str(attr.get('content', '')).lower()
+        title = str(attr.get('title', '')).lower()
+        
+        score = 0
+        for keyword in query_keywords:
+            if keyword in title:
+                score += 5  
+            if keyword in content:
+                score += 1  
+                
+        if score > 0:
+            candidates.append({
+                "doc_id": node,
+                "title": attr.get("title", str(node)),
+                "content": attr.get("content", "No content available"),
+                "reference": attr.get("reference", "No reference available"),
+                "score": float(score) 
+            })
+            
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    return candidates[:top_k]
+
+# ----------------------------------------------------------
+# Execute Retrieval
+# ----------------------------------------------------------
+USER_QUERY = "How can a new Test Environment be created in the application?"
+TOP_K = 10 
+
+candidates = retrieve_candidates(graph_index=KG, query=USER_QUERY, top_k=TOP_K)
+
+print("=" * 90)
+print(f"TOP {TOP_K} RETRIEVED DOCUMENTS")
+print("=" * 90)
+print(f"Query: {USER_QUERY}\n")
+
+if len(candidates) == 0:
+    print("No documents found for this query.")
+else:
+    for rank, candidate in enumerate(candidates, 1):
+        doc_id = candidate["doc_id"]
+        title = candidate["title"]
+        content = candidate["content"]
+        reference = candidate["reference"]
+        score = candidate["score"]
+        
+        print(f"\n{'-' * 90}")
+        print(f" Rank      : {rank}")
+        print(f" Doc ID    : {doc_id}")
+        print(f" Title     : {title}")
+        print(f" Reference : {reference}")
+        print(f" Score     : {score:.2f}")
+        print(f"{'-' * 90}")
+        print(f" Content   :")
+        print(f" {content[:2000]}")
+        if len(content) > 2000:
+            print(f"   ... [truncated, total {len(content)} chars]")
+
+print("\n" + "=" * 90)
+print(f"Total Retrieved: {len(candidates)} documents")
+print("=" * 90)
