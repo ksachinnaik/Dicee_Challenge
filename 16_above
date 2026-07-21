@@ -1,86 +1,91 @@
 # ==========================================================
-# Cell 16: Top-K Document Retrieval (No LLM, Pure Graph)
+# Cell 16: Top 5 Document Retrieval (Pure Graph, No LLM)
 # ==========================================================
 import re
 
 print("=" * 90)
-print("TOP 10 RETRIEVED DOCUMENTS (No LLM)")
+print("TOP 5 RETRIEVED DOCUMENTS (No LLM - Pure Knowledge Graph)")
 print("=" * 90)
 
 # ----------------------------------------------------------
-# 1. User Query & Configuration
+# 1. User Query
 # ----------------------------------------------------------
-query = "Why is being a SQEP important in the context described in the document?"
-TOP_K = 10
-print(f"\nQuery: {query.strip()}\n")
+query = "What happens if I accidentally save changes to the OpenTCCM model?"
+TOP_K = 5
+print(f"\nQuery: {query}\n")
 
 # ----------------------------------------------------------
-# 2. Extract Keywords (Using your proven math)
+# 2. Keyword Extraction (Your proven math)
 # ----------------------------------------------------------
-STOPWORDS = {"how", "can", "a", "new", "be", "created", "in", "the", "what", "is", "of", "to", "and", "for", "on", "it", "does", "typically", "why"}
+STOPWORDS = {"how", "can", "a", "new", "be", "created", "in", "the", "what",
+             "is", "of", "to", "and", "for", "on", "it", "does", "typically",
+             "why", "if", "i", "after"}
 
 def get_keywords(text):
     tokens = set(re.findall(r'[a-z0-9]+', str(text).lower()))
     return tokens - STOPWORDS
 
 query_keywords = get_keywords(query)
+print(f"Extracted Keywords: {query_keywords}\n")
 
 # ----------------------------------------------------------
-# 3. Retrieve Top-K Candidates from Knowledge Graph (KG)
+# 3. Score Every Node in KG Using Keyword Intersection
 # ----------------------------------------------------------
-candidates = []
+node_scores = []
 
 for node, attr in KG.nodes(data=True):
-    # Get title and content
     title = str(attr.get('title', ''))
-    content = str(attr.get('content', ''))
-    reference = str(attr.get('reference', 'No reference available'))
-    
-    # Calculate Keyword Overlap (Intersection)
     title_keywords = get_keywords(title)
-    content_keywords = get_keywords(content)
     
-    # Title matches are worth 5 points, Content matches are worth 1 point
-    title_overlap = len(query_keywords.intersection(title_keywords)) * 5
-    content_overlap = len(query_keywords.intersection(content_keywords)) * 1
+    # Title overlap score
+    overlap = len(query_keywords.intersection(title_keywords))
     
-    total_score = title_overlap + content_overlap
-    
-    if total_score > 0:
-        candidates.append({
-            "doc_id": node,
-            "title": title,
-            "content": content,
-            "reference": reference,
-            "score": float(total_score)
-        })
+    if overlap > 0:
+        node_scores.append((node, overlap))
 
-# Sort by highest score first, then grab the Top K
-candidates.sort(key=lambda x: x["score"], reverse=True)
-top_candidates = candidates[:TOP_K]
+# Sort by highest score first
+node_scores.sort(key=lambda x: x[1], reverse=True)
+
+# Get Top 5 node_ids
+top_node_ids = [n[0] for n in node_scores[:TOP_K]]
+
+print(f"Top {TOP_K} Matching Node IDs Found in KG: {len(top_node_ids)}")
+print()
 
 # ----------------------------------------------------------
-# 4. Display Retrieved Documents (From your PDF formatting)
+# 4. Fetch Full Content from knowledge_nodes DataFrame
 # ----------------------------------------------------------
-if len(top_candidates) == 0:
+# We use the node_ids from KG to pull the full content from Cell 6!
+top_docs = (
+    knowledge_nodes
+    .filter(F.col("node_id").isin(top_node_ids))
+    .select("node_id", "node_name", "node_content")
+    .collect()  # Brings the small Top 5 result to Python
+)
+
+# ----------------------------------------------------------
+# 5. Display Retrieved Documents
+# ----------------------------------------------------------
+if len(top_docs) == 0:
     print("No documents found for this query.")
 else:
-    for rank, candidate in enumerate(top_candidates, 1):
-        print(f"\n{'-' * 90}")
+    for rank, row in enumerate(top_docs, 1):
+        node_id    = row["node_id"]
+        title      = row["node_name"]
+        content    = row["node_content"]
+
+        print(f"{'-' * 90}")
         print(f" Rank      : {rank}")
-        print(f" Doc ID    : {candidate['doc_id']}")
-        print(f" Title     : {candidate['title']}")
-        print(f" Reference : {candidate['reference']}")
-        print(f" Score     : {candidate['score']:.2f}")
+        print(f" Doc ID    : {node_id}")
+        print(f" Title     : {title}")
+        print(f" Reference : {node_id}")
         print(f"{'-' * 90}")
         print(f" Content   :")
-        
-        c_text = candidate["content"]
-        print(f" {c_text[:2000]}")
-        if len(c_text) > 2000:
-            print(f"   ... [truncated, total {len(c_text)} chars]")
+        print(f" {str(content)[:2000]}")
+        if content and len(str(content)) > 2000:
+            print(f"   ... [truncated, total {len(str(content))} chars]")
         print()
 
 print("=" * 90)
-print(f"Total Retrieved: {len(top_candidates)} documents")
+print(f"Total Retrieved: {len(top_docs)} documents")
 print("=" * 90)
