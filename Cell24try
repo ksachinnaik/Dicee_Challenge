@@ -1,0 +1,83 @@
+# ==========================================================
+# Cell A : Graph retrieval -> retrieved_context (chunks)
+# ==========================================================
+import re
+import pandas as pd
+
+TOP_K = 10
+
+STOPWORDS = {"how","can","a","an","be","in","the","what","is","of","to","and",
+             "for","on","it","does","why","are","with","this","that","from",
+             "by","as","at","or","we","i","you","do","my","your"}
+
+def get_keywords(text):
+    return set(re.findall(r'[a-z0-9]+', str(text).lower())) - STOPWORDS
+
+def graph_retrieve(query, top_k=TOP_K):
+    """Query -> top-K docs from the knowledge graph."""
+    qkw = get_keywords(query)
+
+    # 1. start nodes (title weighted x3)
+    scores = []
+    for n, a in KG.nodes(data=True):
+        if not a.get("content"):
+            continue
+        s = (len(qkw & get_keywords(a.get("title", "") or "")) * 3
+             + len(qkw & get_keywords((a.get("content", "") or "")[:2000])))
+        if s > 0:
+            scores.append((n, s))
+    scores.sort(key=lambda x: x[1], reverse=True)
+    start = [n for n, _ in scores[:3]]
+
+    # 2. traverse 1-2 hops, both directions
+    collected = {n: 0 for n in start}
+    def explore(frontier, hop):
+        nxt = set()
+        for cur in frontier:
+            for nb in set(KG.successors(cur)) | set(KG.predecessors(cur)):
+                if nb not in collected:
+                    collected[nb] = hop
+                    nxt.add(nb)
+        return nxt
+    explore(explore(set(start), 1), 2)
+
+    # 3. rank
+    def rel(n):
+        a = KG.nodes[n]
+        txt = (a.get("title","") or "") + " " + (a.get("content","") or "")[:2000]
+        return (len(qkw & get_keywords(txt)) * 5
+                + (3 - min(collected.get(n, 99), 3)) * 2
+                + a.get("degree", KG.degree(n)) * 0.1)
+
+    out = []
+    for n in sorted(collected, key=rel, reverse=True):
+        a = KG.nodes[n]
+        if not a.get("content"):
+            continue
+        out.append({"content": a.get("content",""), "title": a.get("title", n),
+                    "reference": n})
+        if len(out) >= top_k:
+            break
+    return out
+
+# ----------------------------------------------------------
+# Build eval_df : request + retrieved_context (from the graph)
+# ----------------------------------------------------------
+EVAL_TABLE = "knwbt_airr_foundry_dev_catalog.secured.rag_eval_set"
+N_EVAL     = 10
+MAX_CHARS  = 1500
+
+eval_df = spark.table(EVAL_TABLE).select("request").limit(N_EVAL).toPandas()
+
+eval_df["retrieved_context"] = eval_df["request"].apply(
+    lambda q: [
+        {"doc_uri": d["reference"],
+         "content": f"TITLE: {d['title']}\n{d['content'][:MAX_CHARS]}"}
+        for d in graph_retrieve(q, TOP_K)
+    ]
+)
+
+print(f"Built context for {len(eval_df)} questions")
+print("Q1 chunks:", len(eval_df.iloc[0]["retrieved_context"]))
+for c in eval_df.iloc[0]["retrieved_context"][:3]:
+    print(" -", c["doc_uri"])
